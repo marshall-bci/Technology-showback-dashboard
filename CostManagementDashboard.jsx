@@ -7,8 +7,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
+  PieChart, Pie, Cell, Sector, ResponsiveContainer,
 } from 'recharts';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -97,6 +97,12 @@ const cad = (v) =>
 const pct = (num, denom) =>
   denom ? `${((num / denom) * 100).toFixed(1)}%` : '—';
 
+const cadShort = (v) => {
+  if (v == null) return '—';
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  return `$${(v / 1_000).toFixed(0)}k`;
+};
+
 // ─── Tooltip / card styles ────────────────────────────────────────────────────
 const TT   = { fontFamily: "'Open Sans', Calibri, sans-serif", fontSize: 12 };
 const card = (extra = {}) => ({
@@ -124,6 +130,7 @@ export default function TechnologyShowbackDashboard() {
   const [filterShowback,  setFilterShowback]  = useState('All');
   const [filterCostModel, setFilterCostModel] = useState('All');
   const [filterDept,      setFilterDept]      = useState('All');
+  const [hoveredSegment,  setHoveredSegment]  = useState(null);
 
   // ── Upload ──────────────────────────────────────────────────────────────────
   const [uploadStatus, setUploadStatus] = useState('');
@@ -570,26 +577,26 @@ export default function TechnologyShowbackDashboard() {
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
               {[
-                { label: 'Total Actuals',       value: cad(totalActuals), sub: `Budget: ${cad(totalBudget)}`,                         accent: CYAN },
-                { label: 'Technology Share',    value: cad(techActuals),  sub: `${pct(techActuals, totalActuals)} of total`,           accent: NAVY },
-                { label: 'Line Items',          value: filtered.length,   sub: `${rows.length} total in dataset`,                     accent: SLATE },
-                { label: 'Data Quality Flags',  value: flaggedCount,      sub: flaggedCount > 0 ? 'See Data Quality tab →' : 'No issues found', accent: flaggedCount > 0 ? '#E53935' : '#43A047' },
+                { label: 'Total Actuals',       value: cadShort(totalActuals), sub: `Budget: ${cadShort(totalBudget)}`,                  accent: CYAN },
+                { label: 'Technology Share',    value: cadShort(techActuals),  sub: `${pct(techActuals, totalActuals)} of total`,        accent: NAVY },
+                { label: 'Line Items',          value: filtered.length,        sub: `${rows.length} total in dataset`,                  accent: SLATE },
+                { label: 'Data Quality Flags',  value: flaggedCount,           sub: flaggedCount > 0 ? 'See Data Quality tab →' : 'No issues found', accent: flaggedCount > 0 ? '#E53935' : '#43A047' },
               ].map((kpi, i) => (
-                <div key={i} style={card({ padding: '20px 22px', borderLeft: `4px solid ${kpi.accent}` })}>
-                  <div style={{ fontSize: 11, color: '#696F78', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{kpi.label}</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: NAVY, margin: '6px 0 4px' }}>{kpi.value}</div>
-                  <div style={{ fontSize: 11, color: '#BFBFBF' }}>{kpi.sub}</div>
+                <div key={i} style={card({ padding: '20px 22px', borderTop: `3px solid ${kpi.accent}` })}>
+                  <div style={{ fontSize: 11, color: '#696F78', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>{kpi.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, margin: '8px 0 4px' }}>{kpi.value}</div>
+                  <div style={{ fontSize: 11, color: '#696F78' }}>{kpi.sub}</div>
                 </div>
               ))}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20, marginBottom: 20 }}>
 
-              {/* Donut chart — BCI style: hole 65%, clockwise from top, white outlines, legend */}
+              {/* Donut chart — hover elevates segment + dims rest; legend hover mirrors */}
               <div style={card({ padding: 22 })}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Cost by Showback Type</div>
-                <div style={{ fontSize: 11, color: '#BFBFBF', marginBottom: 16 }}>{periodLabel}</div>
+                <div style={{ fontSize: 11, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                  <div style={{ flexShrink: 0, width: 150, height: 150 }}>
+                  <div style={{ flexShrink: 0, width: 168, height: 168 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -603,44 +610,80 @@ export default function TechnologyShowbackDashboard() {
                           endAngle={-270}
                           stroke="white"
                           strokeWidth={2}
+                          onMouseEnter={(_, i) => setHoveredSegment(showbackPieData[i].name)}
+                          onMouseLeave={() => setHoveredSegment(null)}
                         >
-                          {showbackPieData.map((entry, i) => (
-                            <Cell key={i} fill={SHOWBACK_COLORS[entry.name] || DEPT_COLORS[i % DEPT_COLORS.length]} />
-                          ))}
+                          {showbackPieData.map((entry, i) => {
+                            const isActive = hoveredSegment === entry.name;
+                            const isDimmed = hoveredSegment !== null && !isActive;
+                            return (
+                              <Cell key={i}
+                                fill={SHOWBACK_COLORS[entry.name] || DEPT_COLORS[i % DEPT_COLORS.length]}
+                                style={{
+                                  opacity: isDimmed ? 0.2 : 1,
+                                  filter: isActive ? 'brightness(1.08) drop-shadow(0 2px 8px rgba(0,0,0,0.28))' : 'none',
+                                  transition: 'opacity 0.2s ease, filter 0.2s ease',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                            );
+                          })}
                         </Pie>
                         <Tooltip formatter={(v) => cad(v)} contentStyle={TT} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  {/* BCI-style legend: swatch | name | value right-aligned | % */}
+                  {/* BCI-style legend — hover here also focuses the donut */}
                   <div style={{ flex: 1, fontSize: 11 }}>
-                    {showbackPieData.map((entry, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9 }}>
-                        <span style={{
-                          width: 12, height: 12, borderRadius: 2, flexShrink: 0,
-                          background: SHOWBACK_COLORS[entry.name] || DEPT_COLORS[i % DEPT_COLORS.length],
-                        }} />
-                        <span style={{ flex: 1, color: '#515254' }}>{entry.name}</span>
-                        <span style={{ fontWeight: 600, color: NAVY, minWidth: 62, textAlign: 'right' }}>{cad(entry.value)}</span>
-                        <span style={{ color: '#696F79', minWidth: 36, textAlign: 'right' }}>{pct(entry.value, totalPeriod)}</span>
-                      </div>
-                    ))}
+                    {showbackPieData.map((entry, i) => {
+                      const isActive = hoveredSegment === entry.name;
+                      const isDimmed = hoveredSegment !== null && !isActive;
+                      return (
+                        <div key={i}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9,
+                            opacity: isDimmed ? 0.25 : 1,
+                            transition: 'opacity 0.2s ease',
+                            cursor: 'default',
+                          }}
+                          onMouseEnter={() => setHoveredSegment(entry.name)}
+                          onMouseLeave={() => setHoveredSegment(null)}
+                        >
+                          <span style={{
+                            width: 12, height: 12,
+                            borderRadius: 2, flexShrink: 0,
+                            background: SHOWBACK_COLORS[entry.name] || DEPT_COLORS[i % DEPT_COLORS.length],
+                            transform: isActive ? 'scale(1.25)' : 'scale(1)',
+                            transition: 'transform 0.2s ease',
+                          }} />
+                          <span style={{ flex: 1, color: '#515254', fontWeight: isActive ? 700 : 400 }}>{entry.name}</span>
+                          <span style={{ fontWeight: 700, color: NAVY, minWidth: 62, textAlign: 'right' }}>{cadShort(entry.value)}</span>
+                          <span style={{ color: '#696F78', minWidth: 36, textAlign: 'right' }}>{pct(entry.value, totalPeriod)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
 
-              {/* Horizontal bar chart — flat bars, white outlines per BCI style */}
+              {/* Horizontal bar chart — BCI style: Midnight highlight, Gray 3 de-emphasis, value labels at bar end */}
               <div style={card({ padding: 22 })}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Department Allocations</div>
-                <div style={{ fontSize: 11, color: '#BFBFBF', marginBottom: 16 }}>{periodLabel} — top 8</div>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={deptTotals.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 24 }}>
+                <div style={{ fontSize: 11, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={deptTotals} layout="vertical" margin={{ left: 0, right: 56 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
-                    <XAxis type="number" tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} style={{ fontSize: 10 }} />
+                    <XAxis type="number" tickFormatter={v => cadShort(v)} style={{ fontSize: 10 }} />
                     <YAxis type="category" dataKey="name" style={{ fontSize: 11 }} width={110} />
-                    <Tooltip formatter={(v) => cad(v)} contentStyle={TT} />
-                    <Bar dataKey="value" stroke="white" strokeWidth={1}>
-                      {deptTotals.slice(0, 8).map((d, i) => <Cell key={i} fill={d.color} />)}
+                    <Tooltip cursor={false} formatter={(v) => cad(v)} contentStyle={TT} />
+                    <Bar dataKey="value" stroke="white" strokeWidth={1}
+                      activeBar={{ fill: CYAN, stroke: 'white', strokeWidth: 1 }}>
+                      {deptTotals.map((d, i) => (
+                        <Cell key={i} fill={d.isTech ? NAVY : '#BFBFBF'} />
+                      ))}
+                      <LabelList dataKey="value" position="right"
+                        formatter={v => cadShort(v)}
+                        style={{ fontSize: 10, fill: '#515254' }} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
