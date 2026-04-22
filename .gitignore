@@ -1,0 +1,47 @@
+# ── Secrets (never commit) ────────────────────────────────────────────────────
+.env
+.env.local
+.env.production
+*.pem
+*.key
+*.p12
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# ── Database & data files (may contain financial data) ───────────────────────
+backend/data/*.db
+backend/data/*.json
+server/data.json
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ── Tool / AI assistant files ─────────────────────────────────────────────────
+.claude/
+
+# ── Financial source files (raw Excel data) ───────────────────────────────────
+*.xlsm
+*.xlsx
+*.xls

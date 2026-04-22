@@ -1,0 +1,45 @@
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List, Any
+from datetime import datetime
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    display_name: Optional[str] = None
+    is_admin: bool = False
+    allowed_gl_codes: List[str] = []
+    allowed_branches: List[str] = []
+
+
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    is_admin: Optional[bool] = None
+    is_active: Optional[bool] = None
+    allowed_gl_codes: Optional[List[str]] = None
+    allowed_branches: Optional[List[str]] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    display_name: str
+    is_admin: bool
+    is_active: bool
+    allowed_gl_codes: List[str]
+    allowed_branches: List[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LogEntry(BaseModel):
+    id: int
+    user_email: str
+    action: str
+    resource: str
+    ip_address: str
+    timestamp: datetime
+    details: Any
+
+    model_config = {"from_attributes": True}

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Technology Showback Dashboard — Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:#F0F2F5;color:#1A1A2E;min-height:100vh}
+
+  /* ── Login ── */
+  #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#00365B 0%,#005a8e 100%)}
+  .login-card{background:white;border-radius:12px;padding:48px 40px;width:400px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+  .login-logo{font-size:28px;font-weight:700;color:#00365B;letter-spacing:1px;margin-bottom:4px}
+  .login-sub{font-size:13px;color:#888;margin-bottom:32px}
+  .login-title{font-size:20px;font-weight:700;color:#1A1A2E;margin-bottom:8px}
+  .login-desc{font-size:13px;color:#666;margin-bottom:28px;line-height:1.6}
+  .btn-sso{display:flex;align-items:center;justify-content:center;gap:10px;background:#00365B;color:white;border:none;border-radius:8px;padding:14px 24px;width:100%;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
+  .btn-sso:hover{background:#004d80}
+  .ms-icon{width:20px;height:20px;flex-shrink:0}
+
+  /* ── App shell ── */
+  #app-screen{display:none;flex-direction:column;min-height:100vh}
+
+  /* ── Header ── */
+  .header{background:#00365B;color:white;padding:0 32px}
+  .header-top{display:flex;align-items:center;justify-content:space-between;padding:14px 0 0}
+  .header-brand{display:flex;flex-direction:column}
+  .header-title{font-size:18px;font-weight:700;letter-spacing:.3px}
+  .header-meta{font-size:11px;opacity:.6;margin-top:2px}
+  .header-right{display:flex;align-items:center;gap:12px}
+  .user-chip{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:500}
+  .btn-refresh{background:#00ABBD;color:white;border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer}
+  .tabs{display:flex;gap:2px;margin-top:14px}
+  .tab{background:transparent;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2);border-bottom:none;border-radius:4px 4px 0 0;padding:8px 16px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;transition:all .15s}
+  .tab.active{background:#00ABBD;color:white;border-color:#00ABBD;font-weight:600}
+  .tab:hover:not(.active){background:rgba(255,255,255,.1)}
+  .badge{background:#E53935;color:white;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:5px}
+
+  /* ── Filters ── */
+  .filter-bar{background:white;border-bottom:1px solid #E8E8E8;padding:10px 32px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+  .filter-label{font-size:12px;font-weight:600;color:#00365B}
+  .filter-group{display:flex;align-items:center;gap:6px;font-size:12px}
+  .filter-group span{font-weight:500;color:#555}
+  select{border:1px solid #D0D0D0;border-radius:4px;padding:4px 8px;font-size:12px;color:#00365B;font-family:'Inter',sans-serif;cursor:pointer}
+  .filter-count{margin-left:auto;font-size:12px;color:#888}
+
+  /* ── Content ── */
+  .content{padding:24px 32px;flex:1}
+  .tab-panel{display:none}
+  .tab-panel.active{display:block}
+
+  /* ── KPI Cards ── */
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+  .kpi-card{background:white;border-radius:8px;padding:20px 22px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  .kpi-card.cyan{border-left:4px solid #00ABBD}
+  .kpi-card.navy{border-left:4px solid #00365B}
+  .kpi-card.blue{border-left:4px solid #4472C4}
+  .kpi-card.red{border-left:4px solid #E53935}
+  .kpi-label{font-size:11px;color:#777;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+  .kpi-value{font-size:26px;font-weight:700;color:#00365B;margin:6px 0 4px}
+  .kpi-sub{font-size:11px;color:#AAA}
+
+  /* ── Two-col grid ── */
+  .two-col{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;margin-bottom:20px}
+  .card{background:white;border-radius:8px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  .card-title{font-size:13px;font-weight:700;color:#00365B;margin-bottom:2px}
+  .card-sub{font-size:11px;color:#AAA;margin-bottom:16px}
+
+  /* ── Pie chart (CSS) ── */
+  .pie-wrap{display:flex;align-items:center;gap:24px}
+  .pie{width:120px;height:120px;border-radius:50%;background:conic-gradient(#00365B 0% 42%,#00ABBD 42% 73%,#ED7D31 73% 90%,#9E9E9E 90% 100%);flex-shrink:0}
+  .legend{display:flex;flex-direction:column;gap:8px;font-size:12px}
+  .leg-item{display:flex;align-items:center;gap:8px}
+  .leg-dot{width:11px;height:11px;border-radius:2px;flex-shrink:0}
+
+  /* ── Horizontal bars ── */
+  .hbar-list{display:flex;flex-direction:column;gap:9px}
+  .hbar-row{display:flex;align-items:center;gap:10px;font-size:12px}
+  .hbar-label{width:110px;text-align:right;color:#555;flex-shrink:0;font-size:11px}
+  .hbar-track{flex:1;background:#F0F2F5;border-radius:4px;height:18px;overflow:hidden}
+  .hbar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;font-weight:600;color:white}
+  .hbar-amount{width:70px;text-align:right;font-weight:600;color:#00365B;font-size:11px}
+  .tag-you{background:#00ABBD;color:white;font-size:9px;font-weight:700;border-radius:3px;padding:1px 5px;margin-left:4px}
+
+  /* ── Table ── */
+  .tbl-wrap{overflow-x:auto;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  table{width:100%;border-collapse:collapse;font-size:12px;background:white}
+  thead tr{background:#00365B;color:white}
+  th{padding:10px 14px;font-weight:600;text-align:left;white-space:nowrap}
+  th.right{text-align:right}
+  tbody tr:nth-child(even){background:#FAFAFA}
+  tbody tr:hover{background:#EEF6FF}
+  td{padding:9px 14px;border-bottom:1px solid #F0F0F0;white-space:nowrap}
+  td.right{text-align:right;font-weight:600}
+  td.muted{color:#888}
+  td.mono{font-family:monospace;font-size:11px;color:#555}
+  .pill{display:inline-block;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600;color:white}
+  .pill.none{background:#9E9E9E}
+  .pill.headcount{background:#00365B}
+  .pill.consumption{background:#00ABBD}
+  .pill.chargeback{background:#ED7D31}
+
+  /* ── Stacked bar (showback tab) ── */
+  .stack-grid{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+  .stack-row{display:flex;align-items:center;gap:10px;font-size:11px}
+  .stack-label{width:130px;text-align:right;color:#555;flex-shrink:0}
+  .stack-bar{display:flex;flex:1;height:20px;border-radius:4px;overflow:hidden}
+  .stack-seg{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white}
+
+  /* ── Showback cards ── */
+  .showback-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .sc-card{background:white;border-radius:8px;padding:16px 18px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  .sc-card.none{border-left:4px solid #9E9E9E}
+  .sc-card.hc{border-left:4px solid #00365B}
+  .sc-card.cons{border-left:4px solid #00ABBD}
+  .sc-card.cb{border-left:4px solid #ED7D31}
+  .sc-label{font-size:11px;color:#777;font-weight:500}
+  .sc-val{font-size:20px;font-weight:700;color:#00365B;margin:4px 0 2px}
+  .sc-sub{font-size:11px;color:#AAA}
+
+  /* ── Tech detail summary ── */
+  .tech-stats{display:flex;gap:16px;margin-bottom:18px}
+  .ts-card{background:white;border-radius:8px;padding:14px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);flex:1}
+  .ts-label{font-size:11px;color:#777}
+  .ts-val{font-size:20px;font-weight:700;color:#00365B;margin-top:4px}
+
+  /* ── Quality flags ── */
+  .flag-row-yellow td{background:rgba(255,205,21,.12)}
+  .flag-row-pink td{background:rgba(229,115,115,.12);color:#C62828}
+  .flag-row-olive td{background:rgba(193,182,78,.12)}
+  .flag-row-orange td{background:rgba(246,142,71,.12)}
+  .flag-comment{color:#C62828;max-width:280px;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+
+  /* ── Admin ── */
+  .admin-grid{display:grid;grid-template-columns:1fr 380px;gap:20px}
+  .form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .form-row label{font-size:12px;font-weight:600;color:#555}
+  .form-row input,.form-row textarea{border:1px solid #D0D0D0;border-radius:6px;padding:8px 12px;font-size:13px;font-family:'Inter',sans-serif}
+  .form-row input:focus,.form-row textarea:focus{outline:none;border-color:#00ABBD}
+  .form-row textarea{resize:vertical;height:60px}
+  .btn-primary{background:#00365B;color:white;border:none;border-radius:6px;padding:9px 20px;font-size:13px;font-weight:600;cursor:pointer;width:100%}
+  .btn-primary:hover{background:#004d80}
+  .btn-danger{background:#E53935;color:white;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer}
+  .admin-section-title{font-size:14px;font-weight:700;color:#00365B;margin-bottom:14px}
+
+  /* ── Access log ── */
+  .log-row-login td:first-child::before{content:'🔑 ';font-size:11px}
+  .log-row-view td:first-child::before{content:'👁 ';font-size:11px}
+  .log-row-upload td:first-child::before{content:'📤 ';font-size:11px}
+
+  /* ── Empty state ── */
+  .empty{text-align:center;padding:60px;color:#AAA}
+  .empty-icon{font-size:44px;margin-bottom:10px}
+
+  /* ── Section header ── */
+  .section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ LOGIN ═══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">BCI</div>
+    <div class="login-sub">British Columbia Investment Management Corporation</div>
+    <div class="login-title">Technology Showback Dashboard</div>
+    <div class="login-desc">Sign in with your BCI account to view cost allocations and showback reports.</div>
+    <button class="btn-sso" onclick="showApp()">
+      <svg class="ms-icon" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with BCI (Microsoft SSO)
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ APP ═══ -->
+<div id="app-screen">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="header-brand">
+        <div class="header-title">Technology Showback Dashboard</div>
+        <div class="header-meta">F2026 Management Tab · Updated Apr 22, 2026 10:14 AM</div>
+      </div>
+      <div class="header-right">
+        <div class="user-chip">marshall.singh@bci.ca</div>
+        <button class="btn-refresh">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('overview',this)">Overview</button>
+      <button class="tab" onclick="showTab('departments',this)">By Department</button>
+      <button class="tab" onclick="showTab('showback',this)">By Showback Type</button>
+      <button class="tab" onclick="showTab('technology',this)">Technology Detail</button>
+      <button class="tab" onclick="showTab('quality',this)">Data Quality<span class="badge">3</span></button>
+      <button class="tab" onclick="showTab('admin',this)">Admin</button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <span class="filter-label">Filters</span>
+    <div class="filter-group"><span>Period</span>
+      <select><option>Actuals</option><option>Forecast 1</option><option>Forecast 2</option><option>Budget</option></select>
+    </div>
+    <div class="filter-group"><span>Showback</span>
+      <select><option>All</option><option>None</option><option>Headcount</option><option>Consumption</option></select>
+    </div>
+    <div class="filter-group"><span>Cost Model</span>
+      <select><option>All</option><option>Direct Allocation</option><option>Chargeback</option></select>
+    </div>
+    <div class="filter-group"><span>Department</span>
+      <select><option>All</option><option>Technology</option><option>Finance</option><option>CEO</option><option>Legal</option><option>HR</option><option>Audit</option></select>
+    </div>
+    <div class="filter-count">87 of 87 line items</div>
+  </div>
+
+  <!-- ────────────────── OVERVIEW ────────────────── -->
+  <div class="content">
+  <div id="panel-overview" class="tab-panel active">
+    <div class="kpi-grid">
+      <div class="kpi-card cyan"><div class="kpi-label">Total Actuals</div><div class="kpi-value">$4.21M</div><div class="kpi-sub">Budget: $4.58M</div></div>
+      <div class="kpi-card navy"><div class="kpi-label">Technology Share</div><div class="kpi-value">$1.09M</div><div class="kpi-sub">25.9% of total</div></div>
+      <div class="kpi-card blue"><div class="kpi-label">Line Items</div><div class="kpi-value">87</div><div class="kpi-sub">87 total in dataset</div></div>
+      <div class="kpi-card red"><div class="kpi-label">Data Quality Flags</div><div class="kpi-value">3</div><div class="kpi-sub">See Data Quality tab →</div></div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Cost by Showback Type</div>
+        <div class="card-sub">Actuals</div>
+        <div class="pie-wrap">
+          <div class="pie"></div>
+          <div class="legend">
+            <div class="leg-item"><div class="leg-dot" style="background:#00365B"></div><span>None — $1.77M (42%)</span></div>
+            <div class="leg-item"><div class="leg-dot" style="background:#00ABBD"></div><span>Consumption — $1.30M (31%)</span></div>
+            <div class="leg-item"><div class="leg-dot" style="background:#ED7D31"></div><span>Chargeback — $0.72M (17%)</span></div>
+            <div class="leg-item"><div class="leg-dot" style="background:#9E9E9E"></div><span>Headcount — $0.42M (10%)</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Department Allocations</div>
+        <div class="card-sub">Actuals — top 8</div>
+        <div class="hbar-list">
+          <div class="hbar-row"><div class="hbar-label">Technology<span class="tag-you">You</span></div><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:#00365B">$1.09M</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">Finance</div><div class="hbar-track"><div class="hbar-fill" style="width:76%;background:#00ABBD">$832k</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">CD&O + Corp Ops</div><div class="hbar-track"><div class="hbar-fill" style="width:58%;background:#4472C4">$631k</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">IO</div><div class="hbar-track"><div class="hbar-fill" style="width:42%;background:#ED7D31">$458k</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">CEO</div><div class="hbar-track"><div class="hbar-fill" style="width:30%;background:#A9D18E">$327k</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">Legal</div><div class="hbar-track"><div class="hbar-fill" style="width:22%;background:#FFC000">$240k</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">IRR</div><div class="hbar-track"><div class="hbar-fill" style="width:16%;background:#7030A0">$174k</div></div></div>
+          <div class="hbar-row"><div class="hbar-label">Audit</div><div class="hbar-track"><div class="hbar-fill" style="width:10%;background:#C55A11">$109k</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ────────────────── BY DEPARTMENT ────────────────── -->
+  <div id="panel-departments" class="tab-panel">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Allocated Cost by Department</div>
+      <div class="card-sub">Actuals</div>
+      <div class="hbar-list">
+        <div class="hbar-row"><div class="hbar-label">Technology<span class="tag-you">You</span></div><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:#00365B">$1,090,420</div></div><div class="hbar-amount">$1.09M</div></div>
+        <div class="hbar-row"><div class="hbar-label">Finance</div><div class="hbar-track"><div class="hbar-fill" style="width:76%;background:#00ABBD">$832,150</div></div><div class="hbar-amount">$832k</div></div>
+        <div class="hbar-row"><div class="hbar-label">CD&O + Corp Ops</div><div class="hbar-track"><div class="hbar-fill" style="width:58%;background:#4472C4">$631,200</div></div><div class="hbar-amount">$631k</div></div>
+        <div class="hbar-row"><div class="hbar-label">IO</div><div class="hbar-track"><div class="hbar-fill" style="width:42%;background:#ED7D31">$458,000</div></div><div class="hbar-amount">$458k</div></div>
+        <div class="hbar-row"><div class="hbar-label">CEO</div><div class="hbar-track"><div class="hbar-fill" style="width:30%;background:#A9D18E">$327,500</div></div><div class="hbar-amount">$328k</div></div>
+        <div class="hbar-row"><div class="hbar-label">Legal</div><div class="hbar-track"><div class="hbar-fill" style="width:22%;background:#FFC000">$240,000</div></div><div class="hbar-amount">$240k</div></div>
+        <div class="hbar-row"><div class="hbar-label">IRR</div><div class="hbar-track"><div class="hbar-fill" style="width:16%;background:#7030A0">$174,300</div></div><div class="hbar-amount">$174k</div></div>
+        <div class="hbar-row"><div class="hbar-label">Audit</div><div class="hbar-track"><div class="hbar-fill" style="width:10%;background:#C55A11">$109,000</div></div><div class="hbar-amount">$109k</div></div>
+        <div class="hbar-row"><div class="hbar-label">HR</div><div class="hbar-track"><div class="hbar-fill" style="width:8%;background:#FF6699">$87,200</div></div><div class="hbar-amount">$87k</div></div>
+        <div class="hbar-row"><div class="hbar-label">CM&CI</div><div class="hbar-track"><div class="hbar-fill" style="width:6%;background:#92D050">$65,400</div></div><div class="hbar-amount">$65k</div></div>
+        <div class="hbar-row"><div class="hbar-label">ISR</div><div class="hbar-track"><div class="hbar-fill" style="width:4%;background:#00B0F0">$43,100</div></div><div class="hbar-amount">$43k</div></div>
+        <div class="hbar-row"><div class="hbar-label">PE</div><div class="hbar-track"><div class="hbar-fill" style="width:3%;background:#FF4444">$32,800</div></div><div class="hbar-amount">$33k</div></div>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Department</th><th class="right">Amount</th><th class="right">% of Total</th><th class="right"># Line Items</th></tr></thead>
+        <tbody>
+          <tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;background:#00365B;border-radius:2px;display:inline-block"></span>Technology<span class="tag-you">You</span></span></td><td class="right">$1,090,420</td><td class="right muted">25.9%</td><td class="right muted">87</td></tr>
+          <tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;background:#00ABBD;border-radius:2px;display:inline-block"></span>Finance</span></td><td class="right">$832,150</td><td class="right muted">19.8%</td><td class="right muted">72</td></tr>
+          <tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;background:#4472C4;border-radius:2px;display:inline-block"></span>CD&O + Corp Ops</span></td><td class="right">$631,200</td><td class="right muted">15.0%</td><td class="right muted">68</td></tr>
+          <tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;background:#ED7D31;border-radius:2px;display:inline-block"></span>IO</span></td><td class="right">$458,000</td><td class="right muted">10.9%</td><td class="right muted">45</td></tr>
+          <tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;background:#A9D18E;border-radius:2px;display:inline-block"></span>CEO</span></td><td class="right">$327,500</td><td class="right muted">7.8%</td><td class="right muted">38</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ────────────────── BY SHOWBACK TYPE ────────────────── -->
+  <div id="panel-showback" class="tab-panel">
+    <div class="showback-cards">
+      <div class="sc-card none"><div class="sc-label">No Showback</div><div class="sc-val">$1.77M</div><div class="sc-sub">36 line items · 42%</div></div>
+      <div class="sc-card cons"><div class="sc-label">Consumption</div><div class="sc-val">$1.30M</div><div class="sc-sub">28 line items · 31%</div></div>
+      <div class="sc-card cb"><div class="sc-label">Chargeback</div><div class="sc-val">$720k</div><div class="sc-sub">14 line items · 17%</div></div>
+      <div class="sc-card hc"><div class="sc-label">Headcount</div><div class="sc-val">$420k</div><div class="sc-sub">9 line items · 10%</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Showback Type by Cost Model Category</div>
+      <div class="card-sub">Actuals — stacked by type</div>
+      <div style="display:flex;gap:14px;font-size:11px;margin-bottom:12px">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#9E9E9E;border-radius:2px;margin-right:4px"></span>None</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#00ABBD;border-radius:2px;margin-right:4px"></span>Consumption</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#ED7D31;border-radius:2px;margin-right:4px"></span>Chargeback</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#00365B;border-radius:2px;margin-right:4px"></span>Headcount</span>
+      </div>
+      <div class="stack-grid">
+        <div class="stack-row"><div class="stack-label">Infrastructure</div><div class="stack-bar"><div class="stack-seg" style="width:35%;background:#9E9E9E">35%</div><div class="stack-seg" style="width:40%;background:#00ABBD">40%</div><div class="stack-seg" style="width:15%;background:#ED7D31">15%</div><div class="stack-seg" style="width:10%;background:#00365B">10%</div></div></div>
+        <div class="stack-row"><div class="stack-label">Software Licences</div><div class="stack-bar"><div class="stack-seg" style="width:50%;background:#9E9E9E">50%</div><div class="stack-seg" style="width:30%;background:#00ABBD">30%</div><div class="stack-seg" style="width:20%;background:#ED7D31">20%</div></div></div>
+        <div class="stack-row"><div class="stack-label">Managed Services</div><div class="stack-bar"><div class="stack-seg" style="width:60%;background:#9E9E9E">60%</div><div class="stack-seg" style="width:25%;background:#00ABBD">25%</div><div class="stack-seg" style="width:15%;background:#00365B">15%</div></div></div>
+        <div class="stack-row"><div class="stack-label">Consulting</div><div class="stack-bar"><div class="stack-seg" style="width:20%;background:#9E9E9E">20%</div><div class="stack-seg" style="width:45%;background:#ED7D31">45%</div><div class="stack-seg" style="width:35%;background:#00365B">35%</div></div></div>
+        <div class="stack-row"><div class="stack-label">Hardware</div><div class="stack-bar"><div class="stack-seg" style="width:70%;background:#9E9E9E">70%</div><div class="stack-seg" style="width:20%;background:#00ABBD">20%</div><div class="stack-seg" style="width:10%;background:#ED7D31">10%</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ────────────────── TECHNOLOGY DETAIL ────────────────── -->
+  <div id="panel-technology" class="tab-panel">
+    <div class="tech-stats">
+      <div class="ts-card" style="border-left:3px solid #00365B"><div class="ts-label">Technology (Actuals)</div><div class="ts-val">$1,090,420</div></div>
+      <div class="ts-card" style="border-left:3px solid #00ABBD"><div class="ts-label">Technology Column Allocation</div><div class="ts-val">$1,090,420</div></div>
+      <div class="ts-card" style="border-left:3px solid #4472C4"><div class="ts-label">Line Items</div><div class="ts-val">87</div></div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>PID</th><th>Description</th><th>GL Category</th><th>Showback</th><th>Cost Model</th><th class="right">Actuals</th><th class="right">Budget</th><th class="right">Technology $</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">P10234</td><td>Microsoft Azure — Core Infrastructure</td><td class="muted">Infrastructure</td><td><span class="pill consumption">Consumption</span></td><td class="muted" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">Direct Allocation to Technology</td><td class="right">$320,400</td><td class="right muted">$340,000</td><td class="right" style="color:#00365B;font-weight:700">$320,400</td></tr>
+          <tr><td class="mono">P10891</td><td>ServiceNow Enterprise License</td><td class="muted">Software</td><td><span class="pill headcount">Headcount</span></td><td class="muted">Direct Allocation to All</td><td class="right">$215,000</td><td class="right muted">$215,000</td><td class="right" style="color:#00365B;font-weight:700">$55,900</td></tr>
+          <tr><td class="mono">P11042</td><td>Managed SOC Security Services</td><td class="muted">Security</td><td><span class="pill chargeback">Chargeback</span></td><td class="muted">Chargeback</td><td class="right">$180,000</td><td class="right muted">$200,000</td><td class="right" style="color:#00365B;font-weight:700">$180,000</td></tr>
+          <tr><td class="mono">P10567</td><td>Cisco Network Maintenance</td><td class="muted">Infrastructure</td><td><span class="pill none">None</span></td><td class="muted">Direct Allocation to Technology</td><td class="right">$142,300</td><td class="right muted">$145,000</td><td class="right" style="color:#00365B;font-weight:700">$142,300</td></tr>
+          <tr><td class="mono">P10988</td><td>Crowdstrike Endpoint Protection</td><td class="muted">Security</td><td><span class="pill consumption">Consumption</span></td><td class="muted">Direct Allocation to All</td><td class="right">$98,500</td><td class="right muted">$105,000</td><td class="right" style="color:#00365B;font-weight:700">$25,610</td></tr>
+          <tr><td class="mono">P11230</td><td>Oracle DB Cloud — Finance Workloads</td><td class="muted">Software</td><td><span class="pill consumption">Consumption</span></td><td class="muted">Direct Allocation to Finance</td><td class="right">$87,200</td><td class="right muted">$90,000</td><td class="right" style="color:#00365B;font-weight:700">$0</td></tr>
+          <tr><td class="mono">P10344</td><td>IT Project Management Consulting</td><td class="muted">Consulting</td><td><span class="pill headcount">Headcount</span></td><td class="muted">Direct Allocation to All</td><td class="right">$76,000</td><td class="right muted">$80,000</td><td class="right" style="color:#00365B;font-weight:700">$19,760</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ────────────────── DATA QUALITY ────────────────── -->
+  <div id="panel-quality" class="tab-panel">
+    <div style="background:white;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07)">
+      <div style="padding:14px 20px;border-bottom:1px solid #EEE;display:flex;align-items:center;gap:12px">
+        <span style="font-size:14px;font-weight:700;color:#00365B">3 flagged rows</span>
+        <span style="font-size:12px;color:#888">from Comments column (AD) in the Management Tab</span>
+      </div>
+      <div style="padding:10px 20px;background:#FFF8E1;font-size:12px;color:#795548;border-bottom:1px solid #EEE">
+        <b>Colour guide:</b>&nbsp;&nbsp;
+        <span style="background:rgba(255,205,21,.3);padding:1px 8px;border-radius:3px;margin-right:8px">Yellow = No PID code</span>
+        <span style="background:rgba(229,115,115,.2);padding:1px 8px;border-radius:3px;margin-right:8px">Pink = Missing Cost Model data</span>
+        <span style="background:rgba(193,182,78,.2);padding:1px 8px;border-radius:3px">Olive = Chargeback to verify</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#00365B;color:white"><th style="padding:10px 14px;font-weight:600">PID</th><th style="padding:10px 14px">Branch</th><th style="padding:10px 14px">GL Code</th><th style="padding:10px 14px">Description</th><th style="padding:10px 14px;text-align:right">Actuals</th><th style="padding:10px 14px">Flag / Comment</th></tr></thead>
+        <tbody>
+          <tr class="flag-row-yellow">
+            <td style="padding:9px 14px;font-family:monospace;font-size:11px">—</td>
+            <td style="padding:9px 14px">Technology Infrastructure</td>
+            <td style="padding:9px 14px;font-family:monospace;font-size:11px">52100</td>
+            <td style="padding:9px 14px">Miscellaneous IT Expense</td>
+            <td style="padding:9px 14px;text-align:right">$12,400</td>
+            <td style="padding:9px 14px;color:#795548;font-size:11px">Check the description and reason for no PD code.</td>
+          </tr>
+          <tr class="flag-row-pink">
+            <td style="padding:9px 14px;font-family:monospace;font-size:11px">P10771</td>
+            <td style="padding:9px 14px">Technology Operations</td>
+            <td style="padding:9px 14px;font-family:monospace;font-size:11px">54200</td>
+            <td style="padding:9px 14px">Cloud Storage — Archive Tier</td>
+            <td style="padding:9px 14px;text-align:right">$8,900</td>
+            <td style="padding:9px 14px;color:#C62828;font-size:11px">Missing in Cost Model: Current Cost Model, Showback Type. Please populate the master data.</td>
+          </tr>
+          <tr class="flag-row-olive">
+            <td style="padding:9px 14px;font-family:monospace;font-size:11px">P11418</td>
+            <td style="padding:9px 14px">Cybersecurity</td>
+            <td style="padding:9px 14px;font-family:monospace;font-size:11px">53300</td>
+            <td style="padding:9px 14px">Pen Testing — External Vendor</td>
+            <td style="padding:9px 14px;text-align:right">$45,000</td>
+            <td style="padding:9px 14px;color:#5D4037;font-size:11px">Chargeback — verify if correct. Check chargebacks, if correct.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ────────────────── ADMIN ────────────────── -->
+  <div id="panel-admin" class="tab-panel">
+    <div class="admin-grid">
+
+      <!-- User list -->
+      <div>
+        <div class="section-hdr">
+          <div class="admin-section-title">User Access Management</div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Allowed GLs</th><th>Allowed Branches</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td>marshall.singh@bci.ca</td><td>Marshall Singh</td>
+                <td><span style="background:#00365B;color:white;font-size:10px;font-weight:700;border-radius:3px;padding:2px 7px">Admin</span></td>
+                <td class="muted">All</td><td class="muted">All</td>
+                <td><span style="color:#43A047;font-weight:600;font-size:11px">● Active</span></td>
+                <td><button class="btn-danger" disabled style="opacity:.4">Delete</button></td>
+              </tr>
+              <tr>
+                <td>jane.doe@bci.ca</td><td>Jane Doe</td>
+                <td><span style="background:#4472C4;color:white;font-size:10px;font-weight:700;border-radius:3px;padding:2px 7px">Viewer</span></td>
+                <td class="mono" style="font-size:10px">52100, 54200</td>
+                <td class="mono" style="font-size:10px">TECH, ITOP</td>
+                <td><span style="color:#43A047;font-weight:600;font-size:11px">● Active</span></td>
+                <td><button class="btn-danger">Delete</button></td>
+              </tr>
+              <tr>
+                <td>john.smith@bci.ca</td><td>John Smith</td>
+                <td><span style="background:#4472C4;color:white;font-size:10px;font-weight:700;border-radius:3px;padding:2px 7px">Viewer</span></td>
+                <td class="mono" style="font-size:10px">53300, 54100</td>
+                <td class="muted">All</td>
+                <td><span style="color:#E53935;font-weight:600;font-size:11px">● Inactive</span></td>
+                <td><button class="btn-danger">Delete</button></td>
+              </tr>
+              <tr>
+                <td>finance.team@bci.ca</td><td>Finance Upload</td>
+                <td><span style="background:#ED7D31;color:white;font-size:10px;font-weight:700;border-radius:3px;padding:2px 7px">Finance</span></td>
+                <td class="muted">All</td><td class="muted">All</td>
+                <td><span style="color:#43A047;font-weight:600;font-size:11px">● Active</span></td>
+                <td><button class="btn-danger">Delete</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Access log -->
+        <div class="admin-section-title" style="margin-top:24px">Usage Log</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Action</th><th>User</th><th>Resource</th><th>IP</th><th>Time</th></tr></thead>
+            <tbody>
+              <tr class="log-row-view"><td>view_data</td><td>marshall.singh@bci.ca</td><td>/api/data</td><td class="mono">10.1.4.22</td><td class="muted">2026-04-22 10:14</td></tr>
+              <tr class="log-row-upload"><td>upload_data</td><td>finance.team@bci.ca</td><td>F2026 Management Tab (87 rows)</td><td class="mono">10.1.2.5</td><td class="muted">2026-04-22 09:58</td></tr>
+              <tr class="log-row-view"><td>view_data</td><td>jane.doe@bci.ca</td><td>/api/data</td><td class="mono">10.1.5.11</td><td class="muted">2026-04-22 09:45</td></tr>
+              <tr class="log-row-login"><td>login</td><td>john.smith@bci.ca</td><td>SSO callback</td><td class="mono">10.1.3.7</td><td class="muted">2026-04-22 09:30</td></tr>
+              <tr class="log-row-login"><td>login</td><td>marshall.singh@bci.ca</td><td>SSO callback</td><td class="mono">10.1.4.22</td><td class="muted">2026-04-22 08:55</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Add user form -->
+      <div>
+        <div class="card">
+          <div class="admin-section-title">Add / Update User</div>
+          <div class="form-row">
+            <label>Email Address *</label>
+            <input type="email" placeholder="name@bci.ca" />
+          </div>
+          <div class="form-row">
+            <label>Display Name</label>
+            <input type="text" placeholder="First Last (auto-filled from SSO)" />
+          </div>
+          <div class="form-row">
+            <label>Role</label>
+            <select style="border:1px solid #D0D0D0;border-radius:6px;padding:8px 12px;font-size:13px;font-family:'Inter',sans-serif">
+              <option>Viewer (read-only)</option>
+              <option>Finance (can upload data)</option>
+              <option>Admin (full access)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Allowed GL Codes <span style="font-weight:400;color:#AAA">(comma-separated, blank = no access)</span></label>
+            <textarea placeholder="e.g. 52100, 54200, 53300&#10;Leave blank to allow all (for Finance/Admin roles)"></textarea>
+          </div>
+          <div class="form-row">
+            <label>Allowed Branch Codes <span style="font-weight:400;color:#AAA">(comma-separated, blank = all branches)</span></label>
+            <textarea placeholder="e.g. TECH, ITOP, CYSEC&#10;Leave blank to allow all branches"></textarea>
+          </div>
+          <button class="btn-primary">Save User</button>
+        </div>
+
+        <div class="card" style="margin-top:16px;border-left:3px solid #00ABBD">
+          <div style="font-size:12px;font-weight:600;color:#00365B;margin-bottom:6px">How row-level access works</div>
+          <div style="font-size:12px;color:#666;line-height:1.7">
+            When a user logs in via BCI SSO, they <b>only see the rows</b> where the GL code <i>and</i> branch code both match their allow-lists.<br><br>
+            <b>Admins</b> see all rows.<br>
+            <b>Viewers</b> must have at least one GL code granted to see any data.<br>
+            <b>Finance</b> can upload new data but has the same row visibility as their permissions allow.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</div><!-- /app-screen -->
+
+<script>
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+}
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
