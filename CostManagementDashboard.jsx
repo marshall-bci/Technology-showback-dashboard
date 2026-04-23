@@ -137,16 +137,27 @@ export default function TechnologyShowbackDashboard() {
   const [uploading,    setUploading]    = useState(false);
 
   // ── Admin ───────────────────────────────────────────────────────────────────
-  const [adminUsers,     setAdminUsers]     = useState([]);
-  const [adminLogs,      setAdminLogs]      = useState([]);
-  const [adminTab,       setAdminTab]       = useState('users');
-  const [userFormEmail,  setUserFormEmail]  = useState('');
-  const [userFormName,   setUserFormName]   = useState('');
-  const [userFormAdmin,  setUserFormAdmin]  = useState(false);
-  const [userFormGLs,    setUserFormGLs]    = useState('');
-  const [userFormBranch, setUserFormBranch] = useState('');
-  const [adminMsg,       setAdminMsg]       = useState('');
-  const [editingUser,    setEditingUser]    = useState(null);
+  const [adminUsers,      setAdminUsers]      = useState([]);
+  const [adminLogs,       setAdminLogs]       = useState([]);
+  const [adminCostModel,  setAdminCostModel]  = useState([]);
+  const [adminHeadcount,  setAdminHeadcount]  = useState([]);
+  const [adminUserList,   setAdminUserList]   = useState([]);
+  const [adminTab,        setAdminTab]        = useState('users');
+  const [userFormEmail,   setUserFormEmail]   = useState('');
+  const [userFormName,    setUserFormName]    = useState('');
+  const [userFormAdmin,   setUserFormAdmin]   = useState(false);
+  const [userFormGLs,     setUserFormGLs]     = useState('');
+  const [userFormBranch,  setUserFormBranch]  = useState('');
+  const [adminMsg,        setAdminMsg]        = useState('');
+  const [editingUser,     setEditingUser]     = useState(null);
+  const [editingCmId,     setEditingCmId]     = useState(null);
+  const [editingCmData,   setEditingCmData]   = useState({});
+  const [editingUlId,     setEditingUlId]     = useState(null);
+  const [editingUlData,   setEditingUlData]   = useState({});
+  const [recalcStatus,    setRecalcStatus]    = useState('');
+  const [recalcing,       setRecalcing]       = useState(false);
+  const [resetModalOpen,  setResetModalOpen]  = useState(false);
+  const [resetTyped,      setResetTyped]      = useState('');
 
   const pollRef = useRef(null);
 
@@ -187,23 +198,28 @@ export default function TechnologyShowbackDashboard() {
     return () => clearInterval(pollRef.current);
   }, [user, fetchData]);
 
+  // ── Upload state ─────────────────────────────────────────────────────────────
+  const [updateRefs, setUpdateRefs] = useState(false);
+
   // ── File upload (admin — sends raw file to /api/upload) ─────────────────────
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    setUploadStatus('Uploading…');
+    setUploadStatus('Uploading and running allocation…');
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`${API_URL}/api/upload`, {
+      const url = `${API_URL}/api/upload?update_refs=${updateRefs}`;
+      const res = await fetch(url, {
         method: 'POST',
         credentials: 'include',
         body: formData,
       });
       if (res.ok) {
         const data = await res.json();
-        setUploadStatus(`✓ ${data.rowCount} rows loaded from "${data.sheetName}".`);
+        const refNote = data.refsUpdated ? ' (reference tables refreshed)' : '';
+        setUploadStatus(`✓ ${data.rowCount} rows calculated${refNote}.`);
         fetchData();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -234,12 +250,33 @@ export default function TechnologyShowbackDashboard() {
     if (res.ok) setAdminLogs(await res.json());
   }, []);
 
+  const loadAdminCostModel = useCallback(async () => {
+    const res = await fetch(`${API_URL}/admin/cost-model`, { credentials: 'include' });
+    if (res.ok) setAdminCostModel(await res.json());
+  }, []);
+
+  const loadAdminHeadcount = useCallback(async () => {
+    const res = await fetch(`${API_URL}/admin/headcount`, { credentials: 'include' });
+    if (res.ok) setAdminHeadcount(await res.json());
+  }, []);
+
+  const loadAdminUserList = useCallback(async () => {
+    const res = await fetch(`${API_URL}/admin/user-listing`, { credentials: 'include' });
+    if (res.ok) setAdminUserList(await res.json());
+  }, []);
+
   useEffect(() => {
-    if (user?.is_admin && activeTab === 'admin') {
-      loadAdminUsers();
-      loadAdminLogs();
-    }
+    if (!user?.is_admin || activeTab !== 'admin') return;
+    loadAdminUsers();
+    loadAdminLogs();
   }, [user, activeTab, loadAdminUsers, loadAdminLogs]);
+
+  useEffect(() => {
+    if (!user?.is_admin || activeTab !== 'admin') return;
+    if (adminTab === 'costmodel') loadAdminCostModel();
+    if (adminTab === 'headcount') loadAdminHeadcount();
+    if (adminTab === 'userlisting') loadAdminUserList();
+  }, [user, activeTab, adminTab, loadAdminCostModel, loadAdminHeadcount, loadAdminUserList]);
 
   const resetUserForm = () => {
     setUserFormEmail(''); setUserFormName(''); setUserFormAdmin(false);
@@ -304,9 +341,11 @@ export default function TechnologyShowbackDashboard() {
   const filtered = rows.filter(r => {
     if (filterShowback !== 'All' && (r.showbackType || 'None') !== filterShowback) return false;
     if (filterCostModel !== 'All') {
-      const cm = r.currentCostModel.toLowerCase();
-      if (filterCostModel === 'Chargeback'        && !cm.includes('chargeback'))       return false;
-      if (filterCostModel === 'Direct Allocation' && !cm.includes('direct allocation')) return false;
+      const cm = (r.currentCostModel || '').toLowerCase();
+      if (filterCostModel === 'Chargeback'         && !cm.includes('chargeback'))        return false;
+      if (filterCostModel === 'Direct Allocation'  && !cm.includes('direct allocation')) return false;
+      if (filterCostModel === 'Spread Allocation'  && !cm.includes('spread'))            return false;
+      if (filterCostModel === 'Showback'           && !cm.includes('showback'))          return false;
     }
     if (filterDept !== 'All') {
       const dk = DEPTS.find(d => d.label === filterDept)?.key;
@@ -537,7 +576,7 @@ export default function TechnologyShowbackDashboard() {
           {[
             { label: 'Period',     value: period,          setter: setPeriod,          options: PERIODS.map(p => ({ value: p.key, label: p.label })) },
             { label: 'Showback',   value: filterShowback,  setter: setFilterShowback,  options: [{ value: 'All', label: 'All' }, ...uniqueShowbacks.map(s => ({ value: s, label: s }))] },
-            { label: 'Cost Model', value: filterCostModel, setter: setFilterCostModel, options: [{ value: 'All', label: 'All' }, { value: 'Direct Allocation', label: 'Direct Allocation' }, { value: 'Chargeback', label: 'Chargeback' }] },
+            { label: 'Cost Model', value: filterCostModel, setter: setFilterCostModel, options: [{ value: 'All', label: 'All' }, { value: 'Direct Allocation', label: 'Direct Allocation' }, { value: 'Spread Allocation', label: 'Spread Allocation' }, { value: 'Showback', label: 'Showback' }, { value: 'Chargeback', label: 'Chargeback' }] },
             { label: 'Department', value: filterDept,      setter: setFilterDept,      options: [{ value: 'All', label: 'All' }, ...DEPTS.map(d => ({ value: d.label, label: d.label }))] },
           ].map(f => (
             <label key={f.label} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -573,14 +612,65 @@ export default function TechnologyShowbackDashboard() {
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* OVERVIEW                                                           */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'overview' && rows.length > 0 && (
+        {activeTab === 'overview' && rows.length > 0 && (() => {
+          const belowThresholdRows = filtered.filter(r =>
+            r.actuals > 0 && r.actuals < 25_000 &&
+            r.showbackType && r.showbackType !== 'None'
+          );
+          const frameworkTiles = [
+            {
+              label: 'Chargeback',
+              sub: 'LOB-specific costs billed directly to departments',
+              color: '#DC642B',
+              rows: filtered.filter(r => (r.showbackType || '').toLowerCase() === 'chargeback' ||
+                                         (r.currentCostModel || '').toLowerCase().includes('chargeback')),
+            },
+            {
+              label: 'Showback — Consumption',
+              sub: 'Cloud & usage-based costs shown back by actual consumption',
+              color: CYAN,
+              rows: filtered.filter(r => (r.showbackType || '') === 'Consumption'),
+            },
+            {
+              label: 'Showback — Headcount',
+              sub: 'Technology assets allocated proportional to headcount',
+              color: NAVY,
+              rows: filtered.filter(r => (r.showbackType || '') === 'Headcount'),
+            },
+            {
+              label: 'Direct / No Showback',
+              sub: 'Costs absorbed by Technology, not yet shown back',
+              color: '#696F79',
+              rows: filtered.filter(r => !r.showbackType || r.showbackType === 'None'),
+            },
+          ];
+          return (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+            {/* PPT Framework tiles — mirrors Slide 4 (4-approach framework) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+              {frameworkTiles.map((tile, i) => {
+                const tileTotal = tile.rows.reduce((s, r) => s + (r[period] || 0), 0);
+                return (
+                  <div key={i} style={card({ padding: '14px 18px', borderTop: `3px solid ${tile.color}` })}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: tile.color, textTransform: 'uppercase', letterSpacing: 0.6 }}>{tile.label}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: NAVY, margin: '6px 0 3px' }}>{cadShort(tileTotal)}</div>
+                    <div style={{ fontSize: 10, color: '#696F78', lineHeight: 1.4, marginBottom: 4 }}>{tile.sub}</div>
+                    <div style={{ fontSize: 10, color: '#BFBFBF' }}>{tile.rows.length} items · {pct(tileTotal, totalPeriod)}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* KPI cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
               {[
-                { label: 'Total Actuals',       value: cadShort(totalActuals), sub: `Budget: ${cadShort(totalBudget)}`,                  accent: CYAN },
-                { label: 'Technology Share',    value: cadShort(techActuals),  sub: `${pct(techActuals, totalActuals)} of total`,        accent: NAVY },
-                { label: 'Line Items',          value: filtered.length,        sub: `${rows.length} total in dataset`,                  accent: SLATE },
-                { label: 'Data Quality Flags',  value: flaggedCount,           sub: flaggedCount > 0 ? 'See Data Quality tab →' : 'No issues found', accent: flaggedCount > 0 ? '#E53935' : '#43A047' },
+                { label: 'Total Actuals',        value: cadShort(totalActuals), sub: `Budget: ${cadShort(totalBudget)}`,                               accent: CYAN },
+                { label: 'Technology Share',     value: cadShort(techActuals),  sub: `${pct(techActuals, totalActuals)} of total actuals`,             accent: NAVY },
+                { label: 'Below $25K Threshold', value: belowThresholdRows.length,
+                  sub: belowThresholdRows.length > 0
+                    ? `${cadShort(belowThresholdRows.reduce((s,r)=>s+r.actuals,0))} shown back below materiality`
+                    : 'No items below threshold',
+                  accent: belowThresholdRows.length > 0 ? '#FF9800' : '#43A047' },
               ].map((kpi, i) => (
                 <div key={i} style={card({ padding: '20px 22px', borderTop: `3px solid ${kpi.accent}` })}>
                   <div style={{ fontSize: 11, color: '#696F78', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>{kpi.label}</div>
@@ -690,7 +780,8 @@ export default function TechnologyShowbackDashboard() {
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* BY DEPARTMENT                                                      */}
@@ -837,8 +928,13 @@ export default function TechnologyShowbackDashboard() {
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* DATA QUALITY                                                       */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'quality' && (
-          <div>
+        {activeTab === 'quality' && (() => {
+          const belowMaterialityRows = rows.filter(r =>
+            r.actuals > 0 && r.actuals < 25_000 &&
+            r.showbackType && r.showbackType !== 'None'
+          );
+          return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {flaggedRows.length === 0 ? (
               <div style={card({ padding: 64, textAlign: 'center' })}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
@@ -849,7 +945,7 @@ export default function TechnologyShowbackDashboard() {
               <div style={card({ overflow: 'hidden' })}>
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>{flaggedRows.length} flagged rows</span>
-                  <span style={{ fontSize: 12, color: '#696F78' }}>from Comments column (AD) in the Management Tab</span>
+                  <span style={{ fontSize: 12, color: '#696F78' }}>from allocation engine comments</span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -881,8 +977,52 @@ export default function TechnologyShowbackDashboard() {
                 </div>
               </div>
             )}
+
+            {/* Below $25K materiality threshold — PPT Slide 8, Action 3 */}
+            <div style={card({ overflow: 'hidden' })}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Below $25K Materiality Threshold</span>
+                  <span style={{ background: '#FF9800', color: 'white', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{belowMaterialityRows.length}</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#696F78', marginTop: 3 }}>
+                  Items currently shown back with actuals below $25K — consider whether showback overhead is justified (ref: Cost Management Strategy Action 3)
+                </div>
+              </div>
+              {belowMaterialityRows.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>
+                  No showback items below the $25K threshold.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: NAVY, color: 'white' }}>
+                        {['PID', 'Description', 'Showback Type', 'Cost Model', 'Actuals'].map((h, i) => (
+                          <th key={h} style={{ padding: '10px 12px', fontWeight: 600, textAlign: i === 4 ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {belowMaterialityRows.map((r, i) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11 }}>{r.pid || '—'}</td>
+                          <td style={{ padding: '8px 12px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 500 }}>{r.showbackType}</span>
+                          </td>
+                          <td style={{ padding: '8px 12px', fontSize: 11, color: '#515254', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.currentCostModel}>{r.currentCostModel}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: '#FF9800' }}>{cad(r.actuals)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* UPLOAD (admin only)                                                */}
@@ -891,30 +1031,50 @@ export default function TechnologyShowbackDashboard() {
           <div style={{ maxWidth: 560 }}>
             <div style={card({ padding: 32 })}>
               <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Upload Cost Management XLSM</div>
-              <div style={{ fontSize: 13, color: '#515254', marginBottom: 8, lineHeight: 1.6 }}>
-                Parses the "Management Tab" sheet server-side and stores it for all users. Finance can also push automatically:
+
+              {/* How it works */}
+              <div style={{ background: '#F0F7FF', border: '1px solid #C8DFF5', borderRadius: 6, padding: '12px 16px', marginBottom: 16, fontSize: 12, lineHeight: 1.7, color: '#515254' }}>
+                <strong style={{ color: NAVY }}>How this works:</strong><br />
+                The dashboard maintains its own copy of the <strong>Cost Model</strong>, <strong>Headcount</strong>, and <strong>User Listing</strong> tables in the database.
+                You can edit those tables directly in the <strong>Admin → Cost Model / Headcount / User Listing</strong> tabs — edits are saved immediately.<br /><br />
+                For day-to-day updates, just upload the XLSM and the system will use the stored reference data to run the allocation.
+                Only tick <em>"Refresh reference tables"</em> when the Cost Model, Headcount or User Listing sheets themselves have changed.
               </div>
-              <div style={{ background: '#F5F5F5', borderRadius: 6, padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: '#333', marginBottom: 20 }}>
-                cd scripts<br />
-                python push_data.py "path/to/Cost Management.xlsm"
-              </div>
-              <div style={{ border: '2px dashed #D0D0D0', borderRadius: 8, padding: '32px 24px', textAlign: 'center', background: '#FAFAFA' }}>
+
+              {/* Checkbox — refresh refs */}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 18, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={updateRefs}
+                  onChange={e => setUpdateRefs(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 13, color: '#515254', lineHeight: 1.5 }}>
+                  <strong>Refresh reference tables from file</strong><br />
+                  <span style={{ fontSize: 11, color: '#696F78' }}>
+                    Re-reads Cost Model, Headcount &amp; User Listing sheets and replaces stored data.
+                    Tick this only when those sheets have changed — it will overwrite any edits made in the Admin panel.
+                  </span>
+                </span>
+              </label>
+
+              <div style={{ border: '2px dashed #D0D0D0', borderRadius: 8, padding: '28px 24px', textAlign: 'center', background: '#FAFAFA' }}>
                 <input type="file" id="cm-file-input" accept=".xlsx,.xlsm,.xls" onChange={handleFileUpload} disabled={uploading} style={{ display: 'none' }} />
                 <label htmlFor="cm-file-input" style={{
                   background: uploading ? '#AAA' : NAVY, color: 'white', padding: '10px 28px',
                   borderRadius: 6, cursor: uploading ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-block',
                 }}>
-                  {uploading ? 'Uploading…' : 'Choose File'}
+                  {uploading ? 'Running allocation…' : 'Choose File & Run Allocation'}
                 </label>
-                <div style={{ marginTop: 10, fontSize: 12, color: '#696F78' }}>
-                  Looks for a sheet ending with "Management Tab" · data from row 11
+                <div style={{ marginTop: 10, fontSize: 11, color: '#696F78' }}>
+                  Reads OC Data Refresh · uses {updateRefs ? 'file' : 'stored'} reference data · results available to all users instantly
                 </div>
               </div>
               {uploadStatus && (
                 <div style={{
                   marginTop: 16, padding: '10px 16px', borderRadius: 6, fontSize: 13,
-                  background: uploadStatus.startsWith('Error') || uploadStatus.startsWith('No') ? '#FFF0F0' : '#F0FFF4',
-                  color:      uploadStatus.startsWith('Error') || uploadStatus.startsWith('No') ? '#C62828' : '#2E7D32',
+                  background: uploadStatus.startsWith('Error') ? '#FFF0F0' : '#F0FFF4',
+                  color:      uploadStatus.startsWith('Error') ? '#C62828' : '#2E7D32',
                 }}>
                   {uploadStatus}
                 </div>
@@ -928,9 +1088,74 @@ export default function TechnologyShowbackDashboard() {
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {activeTab === 'admin' && (
           <div>
+            {/* Danger zone — reset */}
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setResetModalOpen(true); setResetTyped(''); }}
+                style={{
+                  background: 'white', color: '#C62828',
+                  border: '1px solid #C62828', borderRadius: 6,
+                  padding: '7px 16px', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+                }}
+              >
+                Reset to clean slate
+              </button>
+            </div>
+
+            {adminMsg && (
+              <div style={{
+                marginBottom: 16, padding: '9px 14px', borderRadius: 5, fontSize: 13,
+                background: adminMsg.startsWith('✓') ? '#F0FFF4' : '#FFF0F0',
+                color:      adminMsg.startsWith('✓') ? '#2E7D32' : '#C62828',
+              }}>{adminMsg}</div>
+            )}
+
+            {/* Recalculate button */}
+            <div style={{ marginBottom: 20 }}>
+              <button
+                onClick={async () => {
+                  setRecalcing(true);
+                  setRecalcStatus('');
+                  try {
+                    const res = await fetch(`${API_URL}/api/recalculate`, {
+                      method: 'POST', credentials: 'include',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ period }),
+                    });
+                    if (res.ok) {
+                      const d = await res.json();
+                      setRecalcStatus(`✓ Recalculated — ${d.rowCount} rows updated.`);
+                      fetchData();
+                    } else {
+                      const e = await res.json().catch(() => ({}));
+                      setRecalcStatus(`Error: ${e.detail || res.status}`);
+                    }
+                  } catch (err) {
+                    setRecalcStatus(`Error: ${err.message}`);
+                  }
+                  setRecalcing(false);
+                }}
+                disabled={recalcing}
+                style={{
+                  width: '100%', background: recalcing ? '#BFBFBF' : NAVY, color: 'white',
+                  border: 'none', borderRadius: 6, padding: '12px', cursor: recalcing ? 'default' : 'pointer',
+                  fontSize: 14, fontWeight: 600,
+                }}
+              >
+                {recalcing ? 'Recalculating…' : '↻ Recalculate Allocations'}
+              </button>
+              {recalcStatus && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px', borderRadius: 5, fontSize: 13,
+                  background: recalcStatus.startsWith('Error') ? '#FFF0F0' : '#F0FFF4',
+                  color:      recalcStatus.startsWith('Error') ? '#C62828' : '#2E7D32',
+                }}>{recalcStatus}</div>
+              )}
+            </div>
+
             {/* Sub-tabs */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-              {[['users', 'Users'], ['logs', 'Usage Logs']].map(([id, label]) => (
+              {[['users','Users'],['logs','Usage Logs'],['costmodel','Cost Model'],['headcount','Headcount'],['userlisting','User Listing']].map(([id, label]) => (
                 <button key={id} onClick={() => setAdminTab(id)} style={{
                   padding: '8px 20px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500,
                   background: adminTab === id ? NAVY : 'white',
@@ -1074,7 +1299,7 @@ export default function TechnologyShowbackDashboard() {
                           <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11 }}>{l.user_email}</td>
                           <td style={{ padding: '7px 12px' }}>
                             <span style={{
-                              background: l.action.includes('upload') || l.action.includes('push') ? '#E8F4F8' : '#F5F5F5',
+                              background: l.action.includes('upload') || l.action.includes('push') || l.action.includes('recalc') ? '#E8F4F8' : '#F5F5F5',
                               color: NAVY, borderRadius: 3, padding: '2px 6px', fontSize: 11,
                             }}>{l.action}</span>
                           </td>
@@ -1090,10 +1315,300 @@ export default function TechnologyShowbackDashboard() {
                 </div>
               </div>
             )}
+
+            {/* ── Cost Model sub-tab ────────────────────────────────────── */}
+            {adminTab === 'costmodel' && (
+              <div style={card({ overflow: 'hidden' })}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Cost Model ({adminCostModel.length} rows)</span>
+                  <button onClick={loadAdminCostModel} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: NAVY, color: 'white' }}>
+                        {['PID', 'Description', 'GL Category', 'Current Cost Model', 'Showback Type', 'Allocation', ''].map((h, i) => (
+                          <th key={i} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminCostModel.slice(0, 200).map((r, i) => {
+                        const isEditing = editingCmId === r.id;
+                        return (
+                          <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                            <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11 }}>{r.pid}</td>
+                            <td style={{ padding: '7px 12px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
+                            <td style={{ padding: '7px 12px', color: '#515254' }}>{r.glCategory}</td>
+                            <td style={{ padding: '7px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#515254' }} title={r.currentCostModel}>
+                              {isEditing
+                                ? <input value={editingCmData.currentCostModel ?? r.currentCostModel} onChange={e => setEditingCmData(d => ({...d, currentCostModel: e.target.value}))}
+                                    style={{ width: '100%', border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 11 }} />
+                                : r.currentCostModel}
+                            </td>
+                            <td style={{ padding: '7px 12px' }}>
+                              {isEditing
+                                ? <select value={editingCmData.showbackType ?? r.showbackType ?? ''} onChange={e => setEditingCmData(d => ({...d, showbackType: e.target.value}))}
+                                    style={{ border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 11 }}>
+                                    {['None','Headcount','Consumption','Chargeback',''].map(v => <option key={v} value={v}>{v || '—'}</option>)}
+                                  </select>
+                                : r.showbackType && <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 3, padding: '2px 7px', fontSize: 11 }}>{r.showbackType}</span>}
+                            </td>
+                            <td style={{ padding: '7px 12px', color: '#515254' }}>
+                              {isEditing
+                                ? <input value={editingCmData.allocation ?? r.allocation} onChange={e => setEditingCmData(d => ({...d, allocation: e.target.value}))}
+                                    style={{ width: '100%', border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 11 }} />
+                                : r.allocation}
+                            </td>
+                            <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>
+                              {isEditing ? (
+                                <>
+                                  <button onClick={async () => {
+                                    await fetch(`${API_URL}/admin/cost-model/${r.id}`, {
+                                      method: 'PUT', credentials: 'include',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(editingCmData),
+                                    });
+                                    setEditingCmId(null); setEditingCmData({});
+                                    loadAdminCostModel();
+                                  }} style={{ background: NAVY, color: 'white', border: 'none', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11, marginRight: 4 }}>Save</button>
+                                  <button onClick={() => { setEditingCmId(null); setEditingCmData({}); }} style={{ background: 'none', border: '1px solid #D0D0D0', color: '#515254', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+                                </>
+                              ) : (
+                                <button onClick={() => { setEditingCmId(r.id); setEditingCmData({}); }} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11 }}>Edit</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {adminCostModel.length === 0 && (
+                        <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {adminCostModel.length > 200 && (
+                  <div style={{ padding: '10px 20px', fontSize: 12, color: '#696F78', borderTop: '1px solid #EEE' }}>
+                    Showing first 200 of {adminCostModel.length} rows.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Headcount sub-tab ─────────────────────────────────────── */}
+            {adminTab === 'headcount' && (
+              <div style={card({ overflow: 'hidden', maxWidth: 480 })}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Headcount FY2026</span>
+                  <button onClick={loadAdminHeadcount} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: NAVY, color: 'white' }}>
+                      {['Dept Code', 'Department', 'Headcount FY2026'].map((h, i) => (
+                        <th key={i} style={{ padding: '9px 16px', textAlign: i === 2 ? 'right' : 'left', fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminHeadcount.map((r, i) => (
+                      <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                        <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 12 }}>{r.shortCode}</td>
+                        <td style={{ padding: '8px 16px' }}>{r.deptName}</td>
+                        <td style={{ padding: '8px 16px', textAlign: 'right' }}>
+                          <input
+                            type="number" step="1" min="0"
+                            defaultValue={r.fy2026}
+                            onBlur={async (e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val !== r.fy2026) {
+                                await fetch(`${API_URL}/admin/headcount/${r.id}`, {
+                                  method: 'PUT', credentials: 'include',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ fy2026: val }),
+                                });
+                                loadAdminHeadcount();
+                              }
+                            }}
+                            style={{ width: 90, border: '1px solid #D0D0D0', borderRadius: 4, padding: '4px 8px', fontSize: 13, textAlign: 'right' }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                    {adminHeadcount.length === 0 && (
+                      <tr><td colSpan={3} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── User Listing sub-tab ──────────────────────────────────── */}
+            {adminTab === 'userlisting' && (
+              <div style={card({ overflow: 'hidden' })}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>User Based Listing ({adminUserList.length} rows)</span>
+                  <button onClick={loadAdminUserList} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: NAVY, color: 'white' }}>
+                        {['PID','Description','CEO','Legal','Corp Ops','HR','Audit','CD&O','Finance','Tech','IO','IRR','PE','CM&CI','ISR',''].map((h, i) => (
+                          <th key={i} style={{ padding: '8px 10px', textAlign: i >= 2 && i <= 14 ? 'right' : 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminUserList.slice(0, 200).map((r, i) => {
+                        const isEditing = editingUlId === r.id;
+                        const ulFields = ['ceo','legal','corpOps','hr','audit','cdo','finance','technology','io','irr','pe','cmci','isr'];
+                        return (
+                          <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: 10 }}>{r.pid}</td>
+                            <td style={{ padding: '6px 10px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
+                            {ulFields.map(f => (
+                              <td key={f} style={{ padding: '6px 10px', textAlign: 'right' }}>
+                                {isEditing
+                                  ? <input type="number" step="1" min="0"
+                                      value={editingUlData[f] ?? r[f] ?? 0}
+                                      onChange={e => setEditingUlData(d => ({...d, [f]: parseFloat(e.target.value) || 0}))}
+                                      style={{ width: 50, border: '1px solid #D0D0D0', borderRadius: 3, padding: '2px 4px', fontSize: 10, textAlign: 'right' }} />
+                                  : (r[f] || 0)}
+                              </td>
+                            ))}
+                            <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                              {isEditing ? (
+                                <>
+                                  <button onClick={async () => {
+                                    await fetch(`${API_URL}/admin/user-listing/${r.id}`, {
+                                      method: 'PUT', credentials: 'include',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(editingUlData),
+                                    });
+                                    setEditingUlId(null); setEditingUlData({});
+                                    loadAdminUserList();
+                                  }} style={{ background: NAVY, color: 'white', border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 10, marginRight: 4 }}>Save</button>
+                                  <button onClick={() => { setEditingUlId(null); setEditingUlData({}); }} style={{ background: 'none', border: '1px solid #D0D0D0', color: '#515254', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 10 }}>✕</button>
+                                </>
+                              ) : (
+                                <button onClick={() => { setEditingUlId(r.id); setEditingUlData({...r}); }} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 10 }}>Edit</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {adminUserList.length === 0 && (
+                        <tr><td colSpan={16} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {adminUserList.length > 200 && (
+                  <div style={{ padding: '10px 20px', fontSize: 12, color: '#696F78', borderTop: '1px solid #EEE' }}>
+                    Showing first 200 of {adminUserList.length} rows.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
       </div>
+
+      {/* ── Reset confirmation modal ─────────────────────────────────────────── */}
+      {resetModalOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: 'white', borderRadius: 10, padding: '32px 28px', width: 420,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#C62828', marginBottom: 8 }}>
+              Reset to Clean Slate
+            </div>
+            <div style={{ fontSize: 13, color: '#515254', lineHeight: 1.6, marginBottom: 20 }}>
+              This will permanently delete:
+              <ul style={{ margin: '8px 0 0', paddingLeft: 20, color: '#515254' }}>
+                <li>All OC Data rows</li>
+                <li>Cost Model table</li>
+                <li>Headcount table</li>
+                <li>User Listing table</li>
+                <li>Calculated allocation results</li>
+              </ul>
+            </div>
+            <label style={{ display: 'block', marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#515254', marginBottom: 6 }}>
+                Type <span style={{ fontFamily: 'monospace', background: '#F5F5F5', padding: '1px 6px', borderRadius: 3 }}>RESET</span> to confirm
+              </div>
+              <input
+                autoFocus
+                value={resetTyped}
+                onChange={e => setResetTyped(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && resetTyped === 'RESET') e.currentTarget.form?.querySelector('button[data-reset]')?.click();
+                }}
+                placeholder="RESET"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  border: `1px solid ${resetTyped === 'RESET' ? '#C62828' : '#D0D0D0'}`,
+                  borderRadius: 5, padding: '8px 12px', fontSize: 14,
+                  fontFamily: 'monospace', letterSpacing: 2,
+                  outline: resetTyped === 'RESET' ? '2px solid rgba(198,40,40,0.2)' : 'none',
+                }}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setResetModalOpen(false); setResetTyped(''); }}
+                style={{
+                  background: 'white', color: '#515254', border: '1px solid #D0D0D0',
+                  borderRadius: 6, padding: '9px 20px', cursor: 'pointer', fontSize: 13,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                data-reset
+                disabled={resetTyped !== 'RESET'}
+                onClick={async () => {
+                  setResetModalOpen(false);
+                  setResetTyped('');
+                  const res = await fetch(`${API_URL}/api/reset`, {
+                    method: 'POST', credentials: 'include',
+                  });
+                  if (res.ok) {
+                    setRows([]);
+                    setUpdatedAt(null);
+                    setSheetName(null);
+                    setAdminCostModel([]);
+                    setAdminHeadcount([]);
+                    setAdminUserList([]);
+                    fetchData();
+                    setAdminMsg('✓ All data cleared. Upload a new workbook to start fresh.');
+                  } else {
+                    const e = await res.json().catch(() => ({}));
+                    setAdminMsg(`Reset failed: ${e.detail || res.status}`);
+                  }
+                }}
+                style={{
+                  background: resetTyped === 'RESET' ? '#C62828' : '#E0E0E0',
+                  color: resetTyped === 'RESET' ? 'white' : '#BFBFBF',
+                  border: 'none', borderRadius: 6, padding: '9px 20px',
+                  cursor: resetTyped === 'RESET' ? 'pointer' : 'default',
+                  fontSize: 13, fontWeight: 600,
+                  transition: 'background 0.15s ease, color 0.15s ease',
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

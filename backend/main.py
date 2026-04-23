@@ -12,10 +12,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
 from auth import router as auth_router, get_current_user, require_admin
-from database import engine, Base, get_db, User, AccessLog
+from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry
 from models import UserCreate, UserUpdate, UserResponse, LogEntry
 from permissions import filter_for_user
-from parser import parse_management_tab
+from parser import parse_workbook
 from logger import log_access
 
 # Create DB tables on startup
@@ -68,15 +68,19 @@ async def get_data(request: Request, current_user: User = Depends(get_current_us
 
 @app.post("/api/upload")
 async def upload_file(request: Request, file: UploadFile = File(...),
+                      update_refs: bool = False,
                       current_user: User = Depends(require_admin),
                       db: Session = Depends(get_db)):
     content = await file.read()
-    rows, sheet_name = parse_management_tab(content)
+    result = parse_workbook(content, db, update_refs=update_refs)
+    rows, sheet_name = result["rows"], result["sheetName"]
     _save_data(rows, sheet_name)
     log_access(db, current_user.email, "upload_data", f"{sheet_name} ({len(rows)} rows)",
                request.client.host if request.client else "",
-               {"rowCount": len(rows), "filename": file.filename})
-    return {"ok": True, "rowCount": len(rows), "sheetName": sheet_name}
+               {"rowCount": len(rows), "filename": file.filename,
+                "update_refs": update_refs})
+    return {"ok": True, "rowCount": len(rows), "sheetName": sheet_name,
+            "refsUpdated": update_refs or result.get("refs_empty", False)}
 
 
 @app.post("/api/push")
@@ -156,6 +160,148 @@ async def delete_user(request: Request, email: str,
 async def get_logs(current_user: User = Depends(require_admin),
                    db: Session = Depends(get_db), limit: int = 500):
     return db.query(AccessLog).order_by(AccessLog.timestamp.desc()).limit(limit).all()
+
+
+# ── Admin: Cost Model reference table ─────────────────────────────────────────
+@app.get("/admin/cost-model")
+async def list_cost_model(current_user: User = Depends(require_admin),
+                          db: Session = Depends(get_db)):
+    rows = db.query(CostModelEntry).order_by(CostModelEntry.pid).all()
+    return [
+        {
+            "id": r.id, "branchName": r.branch_name, "glCode": r.gl_code,
+            "branchCode": r.branch_code, "pid": r.pid, "glCategory": r.gl_category,
+            "costModelCategory": r.cost_model_category, "description": r.description,
+            "required": r.required, "currentCostModel": r.current_cost_model,
+            "allocation": r.allocation, "futureCostModel": r.future_cost_model,
+            "showbackType": r.showback_type, "userListingFlag": r.user_listing_flag,
+        }
+        for r in rows
+    ]
+
+
+@app.put("/admin/cost-model/{entry_id}")
+async def update_cost_model(entry_id: int, body: dict,
+                             current_user: User = Depends(require_admin),
+                             db: Session = Depends(get_db)):
+    entry = db.query(CostModelEntry).filter(CostModelEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(404, "Cost model entry not found")
+    field_map = {
+        "description": "description", "required": "required",
+        "currentCostModel": "current_cost_model", "allocation": "allocation",
+        "futureCostModel": "future_cost_model", "showbackType": "showback_type",
+        "userListingFlag": "user_listing_flag", "costModelCategory": "cost_model_category",
+    }
+    for js_key, db_attr in field_map.items():
+        if js_key in body:
+            setattr(entry, db_attr, body[js_key])
+    db.commit()
+    return {"ok": True}
+
+
+# ── Admin: Headcount reference table ──────────────────────────────────────────
+@app.get("/admin/headcount")
+async def list_headcount(current_user: User = Depends(require_admin),
+                         db: Session = Depends(get_db)):
+    rows = db.query(HeadcountEntry).order_by(HeadcountEntry.short_code).all()
+    return [{"id": r.id, "deptCode": r.dept_code, "shortCode": r.short_code,
+             "deptName": r.dept_name, "fy2026": r.fy2026} for r in rows]
+
+
+@app.put("/admin/headcount/{entry_id}")
+async def update_headcount(entry_id: int, body: dict,
+                            current_user: User = Depends(require_admin),
+                            db: Session = Depends(get_db)):
+    entry = db.query(HeadcountEntry).filter(HeadcountEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(404, "Headcount entry not found")
+    if "fy2026" in body:
+        try:
+            entry.fy2026 = float(body["fy2026"])
+        except (ValueError, TypeError):
+            raise HTTPException(400, "fy2026 must be a number")
+    db.commit()
+    return {"ok": True}
+
+
+# ── Admin: User Listing reference table ───────────────────────────────────────
+@app.get("/admin/user-listing")
+async def list_user_listing(current_user: User = Depends(require_admin),
+                             db: Session = Depends(get_db)):
+    rows = db.query(UserListingEntry).order_by(UserListingEntry.pid).all()
+    return [
+        {
+            "id": r.id, "branchCode": r.branch_code, "glCode": r.gl_code,
+            "pid": r.pid, "description": r.description,
+            "ceo": r.ceo, "legal": r.legal, "corpOps": r.corp_ops, "hr": r.hr,
+            "audit": r.audit, "cdo": r.cdo, "finance": r.finance,
+            "technology": r.technology, "io": r.io, "irr": r.irr,
+            "pe": r.pe, "cmci": r.cmci, "isr": r.isr,
+        }
+        for r in rows
+    ]
+
+
+@app.put("/admin/user-listing/{entry_id}")
+async def update_user_listing(entry_id: int, body: dict,
+                               current_user: User = Depends(require_admin),
+                               db: Session = Depends(get_db)):
+    entry = db.query(UserListingEntry).filter(UserListingEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(404, "User listing entry not found")
+    field_map = {
+        "ceo": "ceo", "legal": "legal", "corpOps": "corp_ops", "hr": "hr",
+        "audit": "audit", "cdo": "cdo", "finance": "finance",
+        "technology": "technology", "io": "io", "irr": "irr",
+        "pe": "pe", "cmci": "cmci", "isr": "isr",
+    }
+    for js_key, db_attr in field_map.items():
+        if js_key in body:
+            try:
+                setattr(entry, db_attr, float(body[js_key]))
+            except (ValueError, TypeError):
+                pass
+    db.commit()
+    return {"ok": True}
+
+
+# ── Recalculate ───────────────────────────────────────────────────────────────
+@app.post("/api/recalculate")
+async def recalculate(request: Request, current_user: User = Depends(require_admin),
+                      db: Session = Depends(get_db)):
+    from allocator import run_allocation
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    period = body.get("period", "actuals")
+    rows = run_allocation(db, period=period)
+    if not rows:
+        raise HTTPException(400, "No OC data in database — upload a workbook first")
+    payload = _load_data()
+    _save_data(rows, payload.get("sheetName", "OC Data Refresh"))
+    log_access(db, current_user.email, "recalculate", f"{len(rows)} rows",
+               request.client.host if request.client else "")
+    return {"ok": True, "rowCount": len(rows)}
+
+
+# ── Reset ─────────────────────────────────────────────────────────────────────
+@app.post("/api/reset")
+async def reset_all_data(request: Request, current_user: User = Depends(require_admin),
+                         db: Session = Depends(get_db)):
+    """Clear all cost data and reference tables — returns to a clean slate."""
+    from database import OcRawRow
+    db.query(OcRawRow).delete()
+    db.query(CostModelEntry).delete()
+    db.query(HeadcountEntry).delete()
+    db.query(UserListingEntry).delete()
+    db.commit()
+    DATA_FILE.write_text('{"rows":[],"sheetName":null,"updatedAt":null}', encoding="utf-8")
+    log_access(db, current_user.email, "reset_data", "all tables",
+               request.client.host if request.client else "")
+    return {"ok": True}
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
