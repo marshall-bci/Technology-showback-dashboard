@@ -412,6 +412,17 @@ export default function TechnologyShowbackDashboard() {
   const showbackTypes   = [...new Set(rows.map(r => r.showbackType || 'None'))];
   const uniqueShowbacks = [...new Set(rows.map(r => r.showbackType || 'None'))];
 
+  // ── Command strip (overview only) ───────────────────────────────────────────
+  const cmdShownBack    = filtered.filter(r => {
+    const st = (r.showbackType || '').toLowerCase();
+    return st && st !== 'none' && !st.includes('no showback');
+  }).reduce((s, r) => s + (r[period] || 0), 0);
+  const cmdNotShownBack = totalPeriod - cmdShownBack;
+  const cmdCoveragePct  = totalPeriod > 0 ? (cmdShownBack / totalPeriod * 100) : 0;
+  const cmdVariance     = totalBudget - totalPeriod;
+  const cmdTotalFlags   = rows.filter(r => r.comments).length;
+  const cmdReadinessPct = rows.length > 0 ? ((rows.length - cmdTotalFlags) / rows.length * 100) : 0;
+
   const dynamicPeriods = [
     { key: 'actuals',   label: `FY${baseYear} (${hcYearTypes['fy2026'] || 'Actual'})` },
     { key: 'forecast1', label: `FY${baseYear + 1} (${hcYearTypes['fy2027'] || 'Forecast'})` },
@@ -621,6 +632,73 @@ export default function TechnologyShowbackDashboard() {
         </div>
       </div>
 
+      {/* ── Command strip (Overview only) ────────────────────────────────────── */}
+      {activeTab === 'overview' && rows.length > 0 && (
+        <div style={{
+          background: '#002847',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          borderBottom: '1px solid rgba(255,255,255,.08)',
+        }}>
+          {[
+            {
+              label:  'Total Spend · ' + periodLabel,
+              value:  cadShort(totalPeriod),
+              valueColor: 'white',
+              pill:   `▼ ${cadShort(cmdVariance)} under budget`,
+              pillColor: cmdVariance >= 0 ? '#69F0AE' : '#EF9A9A',
+              pillBg:    cmdVariance >= 0 ? 'rgba(105,240,174,.15)' : 'rgba(239,154,154,.15)',
+              sub:    `vs ${cadShort(totalBudget)} budget`,
+            },
+            {
+              label:  'Showback Coverage',
+              value:  cmdCoveragePct.toFixed(1) + '%',
+              valueColor: '#69F0AE',
+              pill:   `${cadShort(cmdShownBack)} of ${cadShort(totalPeriod)} shown back`,
+              pillColor: 'rgba(255,255,255,.5)',
+              pillBg:    'rgba(255,255,255,.08)',
+              sub:    `${filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return st&&st!=='none'&&!st.includes('no showback'); }).length} of ${filtered.length} items`,
+            },
+            {
+              label:  'Unrecovered · Still in Technology',
+              value:  cadShort(cmdNotShownBack),
+              valueColor: cmdNotShownBack > 0 ? '#FFD54F' : '#69F0AE',
+              pill:   `${totalPeriod > 0 ? (cmdNotShownBack/totalPeriod*100).toFixed(1) : 0}% of total`,
+              pillColor: '#FFD54F',
+              pillBg:    'rgba(255,213,79,.15)',
+              sub:    'needs allocation decision',
+            },
+            {
+              label:  'Data Readiness',
+              value:  cmdReadinessPct.toFixed(1) + '%',
+              valueColor: cmdReadinessPct < 60 ? '#EF9A9A' : cmdReadinessPct < 80 ? '#FFD54F' : '#69F0AE',
+              pill:   `${cmdTotalFlags} flags`,
+              pillColor: '#EF9A9A',
+              pillBg:    'rgba(239,154,154,.15)',
+              sub:    `of ${rows.length} items need review`,
+            },
+          ].map((c, i) => (
+            <div key={i} style={{
+              padding: '14px 28px',
+              borderRight: i < 3 ? '1px solid rgba(255,255,255,.08)' : 'none',
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.4)', marginBottom: 6 }}>
+                {c.label}
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: c.valueColor, letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>
+                {c.value}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>
+                  {c.pill}
+                </span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.4)' }}>{c.sub}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Global Filters ─────────────────────────────────────────────────────── */}
       {!['upload', 'quality', 'admin', 'userlisting'].includes(activeTab) && (
         <div style={{
@@ -663,6 +741,7 @@ export default function TechnologyShowbackDashboard() {
             </div>
           </div>
         )}
+
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* OVERVIEW                                                           */}
@@ -737,7 +816,46 @@ export default function TechnologyShowbackDashboard() {
                 </div>
               ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20, marginBottom: 20 }}>
+            {/* Coverage + Donut row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 16, marginBottom: 20 }}>
+
+              {/* Coverage card — CTO mock style */}
+              <div style={card({ padding: '22px 26px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 24, alignItems: 'center' })}>
+                <div style={{ position: 'relative', width: 100, height: 100, flexShrink: 0 }}>
+                  <div style={{
+                    width: 100, height: 100, borderRadius: '50%',
+                    background: `conic-gradient(${CYAN} 0deg ${cmdCoveragePct / 100 * 360}deg, #F0F0F0 ${cmdCoveragePct / 100 * 360}deg 360deg)`,
+                  }} />
+                  <div style={{
+                    position: 'absolute', inset: 14,
+                    background: 'white', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 20, fontWeight: 700, color: NAVY,
+                  }}>
+                    {cmdCoveragePct.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
+                    Showback Programme Coverage
+                  </div>
+                  <div style={{ fontSize: 12, color: '#696F79', lineHeight: 1.6 }}>
+                    <strong style={{ color: NAVY }}>{cadShort(cmdShownBack)}</strong> of the{' '}
+                    <strong style={{ color: NAVY }}>{cadShort(totalPeriod)}</strong> Technology budget
+                    is actively shown back or charged to LOBs.
+                  </div>
+                  <div style={{
+                    display: 'inline-block', marginTop: 10,
+                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 4,
+                    background: cmdCoveragePct >= 70 ? '#E8F5E9' : cmdCoveragePct >= 55 ? '#FFF8E1' : '#FFEBEE',
+                    color:      cmdCoveragePct >= 70 ? '#2E7D32' : cmdCoveragePct >= 55 ? '#E65100' : '#C62828',
+                  }}>
+                    {cmdCoveragePct >= 70 ? '▲ On track for 85% FY2027 target'
+                     : cmdCoveragePct >= 55 ? '→ Progressing — monitor closely'
+                     : '▼ Below target pace'}
+                  </div>
+                </div>
+              </div>
 
               {/* Donut chart — hover elevates segment + dims rest; legend hover mirrors */}
               <div style={card({ padding: 22 })}>
@@ -814,8 +932,10 @@ export default function TechnologyShowbackDashboard() {
                 </div>
               </div>
 
-              {/* Horizontal bar chart — BCI style: Midnight highlight, Gray 3 de-emphasis, value labels at bar end */}
-              <div style={card({ padding: 22 })}>
+            </div>
+
+            {/* Department bar chart — full width */}
+            <div style={card({ padding: 22, marginBottom: 20 })}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Department Allocations</div>
                 <div style={{ fontSize: 11, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
                 <ResponsiveContainer width="100%" height={320}>
@@ -835,7 +955,6 @@ export default function TechnologyShowbackDashboard() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
             </div>
           </div>
           );
