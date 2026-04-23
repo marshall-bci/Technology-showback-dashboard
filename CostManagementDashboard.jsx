@@ -152,6 +152,8 @@ export default function TechnologyShowbackDashboard() {
   const [editingUser,     setEditingUser]     = useState(null);
   const [editingCmId,     setEditingCmId]     = useState(null);
   const [editingCmData,   setEditingCmData]   = useState({});
+  const [openCombo,       setOpenCombo]       = useState(null);
+  const [comboQuery,      setComboQuery]      = useState('');
   const [editingUlId,     setEditingUlId]     = useState(null);
   const [editingUlData,   setEditingUlData]   = useState({});
   const [recalcStatus,    setRecalcStatus]    = useState('');
@@ -1324,43 +1326,192 @@ export default function TechnologyShowbackDashboard() {
                   <button onClick={loadAdminCostModel} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
                     <thead>
                       <tr style={{ background: NAVY, color: 'white' }}>
-                        {['PID', 'Description', 'GL Category', 'Current Cost Model', 'Showback Type', 'Allocation', ''].map((h, i) => (
-                          <th key={i} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                        {[
+                          'Branch Name', 'GL Code', 'Branch Code', 'PID',
+                          'GL Expense Category', 'Cost Model Category', 'Description',
+                          'Required or Requested', 'Current Cost Model', 'Allocation',
+                          'Future Cost Model', 'Showback Type', 'User Listing', ''
+                        ].map((h, i) => (
+                          <th key={i} style={{ padding: '9px 10px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {adminCostModel.slice(0, 200).map((r, i) => {
+                      {(() => {
+                        const BASE_CM_OPTS = ['Direct Allocation to CEO','Direct Allocation to Legal','Direct Allocation to HR',
+                          'Direct Allocation to Audit','Direct Allocation to CD&O','Direct Allocation to Corp Ops',
+                          'Direct Allocation to Finance','Direct Allocation to Technology','Direct Allocation to IO',
+                          'Direct Allocation to IRR','Direct Allocation to ISR','Direct Allocation to CM&CI',
+                          'Direct Allocation to PE','Chargeback','Spread Allocation'];
+                        const existingVals = adminCostModel.flatMap(r => [r.currentCostModel, r.futureCostModel]).filter(Boolean);
+                        const CM_OPTS = [...new Set([...BASE_CM_OPTS, ...existingVals])].sort();
+                        const CAT_OPTS = [...new Set(adminCostModel.map(r => r.costModelCategory).filter(Boolean))].sort();
+                        const ALLOC_OPTS = ['All','CEO','Legal','HR','Audit','CD&O','Corp Ops','Finance','Technology','IO','IRR','ISR','CM&CI','PE'];
+                        return adminCostModel.slice(0, 200).map((r, i) => {
                         const isEditing = editingCmId === r.id;
+                        const inp = (field, width) => (
+                          <input
+                            value={editingCmData[field] ?? r[field] ?? ''}
+                            onChange={e => setEditingCmData(d => ({...d, [field]: e.target.value}))}
+                            style={{ width: width || 120, border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 5px', fontSize: 11 }}
+                          />
+                        );
+                        const sel = (field, options) => (
+                          <select
+                            value={editingCmData[field] ?? r[field] ?? ''}
+                            onChange={e => setEditingCmData(d => ({...d, [field]: e.target.value}))}
+                            style={{ border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 5px', fontSize: 11 }}
+                          >
+                            {options.map(v => <option key={v} value={v}>{v || '—'}</option>)}
+                          </select>
+                        );
+                        const multiCombo = (field, opts, width) => {
+                          const val = editingCmData[field] ?? r[field] ?? '';
+                          const comboKey = `${r.id}-${field}`;
+                          const isOpen = openCombo === comboKey;
+                          const selected = new Set(
+                            val.trim() === 'All' ? ['All']
+                            : val.split(',').map(s => s.trim()).filter(Boolean)
+                          );
+                          const toggle = (opt) => {
+                            let next;
+                            if (opt === 'All') {
+                              next = selected.has('All') ? '' : 'All';
+                            } else {
+                              const s = new Set(selected); s.delete('All');
+                              s.has(opt) ? s.delete(opt) : s.add(opt);
+                              next = [...s].join(', ');
+                            }
+                            setEditingCmData(d => ({...d, [field]: next}));
+                          };
+                          const filtered = comboQuery
+                            ? opts.filter(o => o.toLowerCase().includes(comboQuery.toLowerCase()))
+                            : opts;
+                          return (
+                            <div style={{ position: 'relative', display: 'inline-flex' }}>
+                              <input
+                                value={val}
+                                onChange={e => { setEditingCmData(d => ({...d, [field]: e.target.value})); setComboQuery(e.target.value); setOpenCombo(comboKey); }}
+                                onFocus={() => { setComboQuery(''); setOpenCombo(comboKey); }}
+                                onBlur={() => setTimeout(() => setOpenCombo(c => c === comboKey ? null : c), 150)}
+                                style={{ width: width || 140, border: '1px solid #D0D0D0', borderRadius: '3px 0 0 3px', borderRight: 'none', padding: '3px 5px', fontSize: 11 }}
+                              />
+                              <button type="button"
+                                onMouseDown={e => { e.preventDefault(); if (!isOpen) setComboQuery(''); setOpenCombo(isOpen ? null : comboKey); }}
+                                style={{ border: '1px solid #D0D0D0', borderRadius: '0 3px 3px 0', background: '#F5F5F5', padding: '0 6px', cursor: 'pointer', fontSize: 9, color: '#555' }}
+                              >▼</button>
+                              {isOpen && (
+                                <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: 'white',
+                                  border: '1px solid #D0D0D0', borderRadius: 4, boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
+                                  maxHeight: 240, overflowY: 'auto', minWidth: '100%', whiteSpace: 'nowrap' }}>
+                                  {filtered.map(o => (
+                                    <label key={o}
+                                      onMouseDown={e => { e.preventDefault(); toggle(o); }}
+                                      style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px', cursor: 'pointer',
+                                        fontSize: 11, background: selected.has(o) ? '#EBF4FF' : 'white' }}
+                                      onMouseEnter={e => { if (!selected.has(o)) e.currentTarget.style.background = '#F5F5F5'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = selected.has(o) ? '#EBF4FF' : 'white'; }}
+                                    >
+                                      <input type="checkbox" checked={selected.has(o)} onChange={() => {}} style={{ margin: 0 }} />
+                                      {o}
+                                    </label>
+                                  ))}
+                                  {filtered.length === 0 && <div style={{ padding: '6px 12px', color: '#999', fontSize: 11 }}>No matches</div>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        };
+                        const combo = (field, opts, width) => {
+                          const val = editingCmData[field] ?? r[field] ?? '';
+                          const comboKey = `${r.id}-${field}`;
+                          const isOpen = openCombo === comboKey;
+                          const filtered = (isOpen && comboQuery)
+                            ? opts.filter(o => o.toLowerCase().includes(comboQuery.toLowerCase()))
+                            : opts;
+                          return (
+                            <div style={{ position: 'relative', display: 'inline-flex' }}>
+                              <input
+                                value={val}
+                                onChange={e => {
+                                  setEditingCmData(d => ({...d, [field]: e.target.value}));
+                                  setComboQuery(e.target.value);
+                                  setOpenCombo(comboKey);
+                                }}
+                                onFocus={() => { setComboQuery(''); setOpenCombo(comboKey); }}
+                                onBlur={() => setTimeout(() => setOpenCombo(c => c === comboKey ? null : c), 150)}
+                                style={{ width: width || 150, border: '1px solid #D0D0D0', borderRadius: '3px 0 0 3px', borderRight: 'none', padding: '3px 5px', fontSize: 11 }}
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={e => {
+                                  e.preventDefault();
+                                  if (!isOpen) { setComboQuery(''); }
+                                  setOpenCombo(isOpen ? null : comboKey);
+                                }}
+                                style={{ border: '1px solid #D0D0D0', borderRadius: '0 3px 3px 0', background: '#F5F5F5', padding: '0 6px', cursor: 'pointer', fontSize: 9, color: '#555' }}
+                              >▼</button>
+                              {isOpen && (
+                                <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: 'white',
+                                  border: '1px solid #D0D0D0', borderRadius: 4, boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
+                                  maxHeight: 220, overflowY: 'auto', minWidth: '100%', whiteSpace: 'nowrap' }}>
+                                  {filtered.map(o => (
+                                    <div key={o}
+                                      onMouseDown={() => { setEditingCmData(d => ({...d, [field]: o})); setComboQuery(''); setOpenCombo(null); }}
+                                      style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 11 }}
+                                      onMouseEnter={e => e.currentTarget.style.background = '#EBF4FF'}
+                                      onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                                    >{o}</div>
+                                  ))}
+                                  {filtered.length === 0 && <div style={{ padding: '6px 12px', color: '#999', fontSize: 11 }}>No matches</div>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        };
                         return (
                           <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
-                            <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11 }}>{r.pid}</td>
-                            <td style={{ padding: '7px 12px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
-                            <td style={{ padding: '7px 12px', color: '#515254' }}>{r.glCategory}</td>
-                            <td style={{ padding: '7px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#515254' }} title={r.currentCostModel}>
-                              {isEditing
-                                ? <input value={editingCmData.currentCostModel ?? r.currentCostModel} onChange={e => setEditingCmData(d => ({...d, currentCostModel: e.target.value}))}
-                                    style={{ width: '100%', border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 11 }} />
-                                : r.currentCostModel}
+                            <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{r.branchName}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.glCode}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.branchCode}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontWeight: 600 }}>{r.pid}</td>
+                            <td style={{ padding: '6px 10px', color: '#515254', whiteSpace: 'nowrap' }}>{r.glCategory}</td>
+                            <td style={{ padding: '6px 10px' }}>
+                              {isEditing ? combo('costModelCategory', CAT_OPTS, 130) : r.costModelCategory}
                             </td>
-                            <td style={{ padding: '7px 12px' }}>
-                              {isEditing
-                                ? <select value={editingCmData.showbackType ?? r.showbackType ?? ''} onChange={e => setEditingCmData(d => ({...d, showbackType: e.target.value}))}
-                                    style={{ border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 11 }}>
-                                    {['None','Headcount','Consumption','Chargeback',''].map(v => <option key={v} value={v}>{v || '—'}</option>)}
-                                  </select>
-                                : r.showbackType && <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 3, padding: '2px 7px', fontSize: 11 }}>{r.showbackType}</span>}
+                            <td style={{ padding: '6px 10px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>
+                              {isEditing ? inp('description', 160) : r.description}
                             </td>
-                            <td style={{ padding: '7px 12px', color: '#515254' }}>
+                            <td style={{ padding: '6px 10px' }}>
                               {isEditing
-                                ? <input value={editingCmData.allocation ?? r.allocation} onChange={e => setEditingCmData(d => ({...d, allocation: e.target.value}))}
-                                    style={{ width: '100%', border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 11 }} />
-                                : r.allocation}
+                                ? sel('required', ['', 'Required', 'Requested'])
+                                : r.required}
                             </td>
-                            <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '6px 10px', maxWidth: 240, overflow: 'visible' }}>
+                              {isEditing ? combo('currentCostModel', CM_OPTS, 180) : <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.currentCostModel}>{r.currentCostModel}</span>}
+                            </td>
+                            <td style={{ padding: '6px 10px', overflow: 'visible' }}>
+                              {isEditing ? multiCombo('allocation', ALLOC_OPTS, 140) : r.allocation}
+                            </td>
+                            <td style={{ padding: '6px 10px', maxWidth: 240, overflow: 'visible' }}>
+                              {isEditing ? combo('futureCostModel', CM_OPTS, 180) : <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.futureCostModel}>{r.futureCostModel}</span>}
+                            </td>
+                            <td style={{ padding: '6px 10px' }}>
+                              {isEditing
+                                ? sel('showbackType', ['', 'None', 'Headcount', 'Consumption', 'Chargeback'])
+                                : r.showbackType
+                                  ? <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 3, padding: '2px 7px', fontSize: 11 }}>{r.showbackType}</span>
+                                  : null}
+                            </td>
+                            <td style={{ padding: '6px 10px' }}>
+                              {isEditing
+                                ? sel('userListingFlag', ['', 'Cost allocated based on user listing'])
+                                : r.userListingFlag}
+                            </td>
+                            <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
                               {isEditing ? (
                                 <>
                                   <button onClick={async () => {
@@ -1380,9 +1531,10 @@ export default function TechnologyShowbackDashboard() {
                             </td>
                           </tr>
                         );
-                      })}
+                      });
+                      })()}
                       {adminCostModel.length === 0 && (
-                        <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
+                        <tr><td colSpan={14} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
                       )}
                     </tbody>
                   </table>
