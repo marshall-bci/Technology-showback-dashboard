@@ -68,6 +68,26 @@ def _load_data() -> dict:
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 
+def _migrate_cdo_split():
+    """Re-run allocation if saved rows still use the old combined cdoCorpOps field."""
+    data = _load_data()
+    rows = data.get("rows", [])
+    if not rows or 'cdoCorpOps' not in rows[0]:
+        return
+    from database import SessionLocal
+    from allocator import run_allocation
+    db = SessionLocal()
+    try:
+        new_rows = run_allocation(db)
+        if new_rows:
+            _save_data(new_rows, data.get("sheetName") or "Cost Data")
+    finally:
+        db.close()
+
+
+_migrate_cdo_split()
+
+
 def _save_data(rows: list, sheet_name: str):
     payload = {"rows": rows, "sheetName": sheet_name, "updatedAt": datetime.utcnow().isoformat()}
     DATA_FILE.write_text(json.dumps(payload), encoding="utf-8")

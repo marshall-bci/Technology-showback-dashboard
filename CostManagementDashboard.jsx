@@ -31,7 +31,8 @@ const DEPTS = [
   { key: 'legal',      label: 'Legal' },
   { key: 'hr',         label: 'HR' },
   { key: 'audit',      label: 'Audit' },
-  { key: 'cdoCorpOps', label: 'CD&O + Corp Ops' },
+  { key: 'cdo',        label: 'CD&O' },
+  { key: 'corpOps',    label: 'Corp Ops' },
   { key: 'finance',    label: 'Finance' },
   { key: 'technology', label: 'Technology' },
   { key: 'io',         label: 'IO' },
@@ -48,13 +49,14 @@ const DEPT_COLORS = [
   '#696F79', // 3  Gray
   '#457B96', // 4  Slate
   '#A6B38C', // 5  Khaki
-  '#4A317E', // 6  Purple
-  '#FDB736', // 7  Yellow
-  '#DC642B', // 8  Orange
-  '#819F4D', // 9  Emerald
-  '#57837B', // 10 Jade
-  '#864C9E', // 11 Amethyst
-  '#AE1E57', // 12 Garnet
+  '#5B6ABF', // 6  Indigo (CD&O)
+  '#4A317E', // 7  Purple (Corp Ops)
+  '#FDB736', // 8  Yellow
+  '#DC642B', // 9  Orange
+  '#819F4D', // 10 Emerald
+  '#57837B', // 11 Jade
+  '#864C9E', // 12 Amethyst
+  '#AE1E57', // 13 Garnet
 ];
 
 const SHOWBACK_COLORS = {
@@ -80,8 +82,9 @@ const PERIODS = [
 ];
 
 const ALL_TABS = [
-  { id: 'overview',    label: 'Overview'          },
-  { id: 'departments', label: 'By Department'     },
+  { id: 'overview',        label: 'Overview'          },
+  { id: 'costmanagement',  label: 'Cost Management'   },
+  { id: 'departments',     label: 'By Department'     },
   { id: 'showback',    label: 'By Showback Type'  },
   { id: 'technology',  label: 'Technology Detail' },
   { id: 'quality',     label: 'Data Quality'      },
@@ -140,6 +143,7 @@ export default function TechnologyShowbackDashboard() {
   const [filterCostModel, setFilterCostModel] = useState('All');
   const [filterDept,      setFilterDept]      = useState('All');
   const [hoveredSegment,  setHoveredSegment]  = useState(null);
+  const [selectedDept,    setSelectedDept]    = useState(null);
 
   // ── Upload ──────────────────────────────────────────────────────────────────
   const [uploadStatus, setUploadStatus] = useState('');
@@ -404,7 +408,7 @@ export default function TechnologyShowbackDashboard() {
   const deptTotals = DEPTS.map((d, i) => ({
     name:   d.label,
     key:    d.key,
-    value:  filtered.reduce((s, r) => s + (r[d.key] || 0), 0),
+    value:  filtered.reduce((s, r) => s + Math.max(r[d.key] || 0, 0), 0),
     color:  DEPT_COLORS[i],
     isTech: d.key === 'technology',
   })).sort((a, b) => b.value - a.value);
@@ -413,21 +417,33 @@ export default function TechnologyShowbackDashboard() {
   const uniqueShowbacks = [...new Set(rows.map(r => r.showbackType || 'None'))];
 
   // ── Command strip (overview only) ───────────────────────────────────────────
-  const cmdShownBack    = filtered.filter(r => {
-    const st = (r.showbackType || '').toLowerCase();
-    return st && st !== 'none' && !st.includes('no showback');
-  }).reduce((s, r) => s + (r[period] || 0), 0);
-  const cmdNotShownBack = totalPeriod - cmdShownBack;
-  const cmdCoveragePct  = totalPeriod > 0 ? (cmdShownBack / totalPeriod * 100) : 0;
+  // Coverage = (Showback Headcount + Showback Consumption types that were successfully
+  // allocated) / total actuals FY2026.
+  // "startsWith showback" catches all three types; excludes "No showback*" and "None".
+  // Bracket = subset stuck specifically because User Based Listing data is missing.
+  const cmdCoverageBase    = totalActuals;
+  const _isShowbackRow     = r => (r.showbackType || '').toLowerCase().startsWith('showback');
+  const cmdShownBack       = filtered
+    .filter(r => _isShowbackRow(r) && DEPTS.some(d => (r[d.key] || 0) !== 0))
+    .reduce((s, r) => s + r.actuals, 0);
+  const cmdPendingUserList = filtered
+    .filter(r =>
+      _isShowbackRow(r) &&
+      (r.comments || '').includes('User Based Listing') &&
+      DEPTS.every(d => (r[d.key] || 0) === 0)
+    )
+    .reduce((s, r) => s + r.actuals, 0);
+  const cmdNotShownBack = Math.max(cmdCoverageBase - cmdShownBack, 0);
+  const cmdCoveragePct  = cmdCoverageBase > 0 ? Math.min(cmdShownBack / cmdCoverageBase * 100, 100) : 0;
   const cmdVariance     = totalBudget - totalPeriod;
   const cmdTotalFlags   = rows.filter(r => r.comments).length;
   const cmdReadinessPct = rows.length > 0 ? ((rows.length - cmdTotalFlags) / rows.length * 100) : 0;
 
   const dynamicPeriods = [
-    { key: 'actuals',   label: `FY${baseYear} (${hcYearTypes['fy2026'] || 'Actual'})` },
-    { key: 'forecast1', label: `FY${baseYear + 1} (${hcYearTypes['fy2027'] || 'Forecast'})` },
-    { key: 'forecast2', label: `FY${baseYear + 2} (${hcYearTypes['fy2028'] || 'Forecast'})` },
-    { key: 'budget',    label: 'Budget' },
+    { key: 'actuals',   label: `FY${baseYear} (Actual)`   },
+    { key: 'budget',    label: `FY${baseYear} (Budget)`   },
+    { key: 'forecast1', label: `FY${baseYear + 1} (Forecast)` },
+    { key: 'forecast2', label: `FY${baseYear + 2} (Forecast)` },
   ];
   const periodLabel = dynamicPeriods.find(p => p.key === period)?.label || period;
 
@@ -654,19 +670,19 @@ export default function TechnologyShowbackDashboard() {
               label:  'Showback Coverage',
               value:  cmdCoveragePct.toFixed(1) + '%',
               valueColor: '#69F0AE',
-              pill:   `${cadShort(cmdShownBack)} of ${cadShort(totalPeriod)} shown back`,
+              pill:   `${cadShort(cmdShownBack)} of ${cadShort(cmdCoverageBase)} shown back`,
               pillColor: 'rgba(255,255,255,.5)',
               pillBg:    'rgba(255,255,255,.08)',
-              sub:    `${filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return st&&st!=='none'&&!st.includes('no showback'); }).length} of ${filtered.length} items`,
+              sub:    `${filtered.filter(r => (r.showbackType||'').toLowerCase().startsWith('showback') && DEPTS.some(d=>(r[d.key]||0)!==0)).length} of ${filtered.length} items${cmdPendingUserList > 0 ? ` · (${cadShort(cmdPendingUserList)} pending User Listing)` : ''}`,
             },
             {
               label:  'Unrecovered · Still in Technology',
               value:  cadShort(cmdNotShownBack),
               valueColor: cmdNotShownBack > 0 ? '#FFD54F' : '#69F0AE',
-              pill:   `${totalPeriod > 0 ? (cmdNotShownBack/totalPeriod*100).toFixed(1) : 0}% of total`,
+              pill:   `${cmdCoverageBase > 0 ? (cmdNotShownBack/cmdCoverageBase*100).toFixed(1) : 0}% of total`,
               pillColor: '#FFD54F',
               pillBg:    'rgba(255,213,79,.15)',
-              sub:    'needs allocation decision',
+              sub:    `needs allocation decision${cmdPendingUserList > 0 ? ` · ${cadShort(cmdPendingUserList)} pending User Listing data` : ''}`,
             },
             {
               label:  'Data Readiness',
@@ -707,10 +723,8 @@ export default function TechnologyShowbackDashboard() {
         }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>Filters</span>
           {[
-            { label: 'Period',     value: period,          setter: setPeriod,          options: dynamicPeriods.map(p => ({ value: p.key, label: p.label })) },
-            { label: 'Showback',   value: filterShowback,  setter: setFilterShowback,  options: [{ value: 'All', label: 'All' }, ...showbackFilterOpts.map(s => ({ value: s, label: s }))] },
-            { label: 'Cost Model', value: filterCostModel, setter: setFilterCostModel, options: [{ value: 'All', label: 'All' }, ...costModelFilterOpts.map(c => ({ value: c, label: c }))] },
-            { label: 'Department', value: filterDept,      setter: setFilterDept,      options: [{ value: 'All', label: 'All' }, ...deptFilterOpts] },
+            { label: 'Period',   value: period,         setter: setPeriod,         options: dynamicPeriods.map(p => ({ value: p.key, label: p.label })) },
+            { label: 'Showback', value: filterShowback, setter: setFilterShowback, options: [{ value: 'All', label: 'All' }, ...showbackFilterOpts.map(s => ({ value: s, label: s }))] },
           ].map(f => (
             <label key={f.label} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontWeight: 500, color: '#515254' }}>{f.label}</span>
@@ -720,6 +734,29 @@ export default function TechnologyShowbackDashboard() {
               </select>
             </label>
           ))}
+          {costModelFilterOpts.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: '1px solid #E8E8E8', paddingLeft: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#BFBFBF', textTransform: 'uppercase', letterSpacing: 1, marginRight: 2 }}>Cost Model</span>
+              {[
+                { value: 'All', label: 'All Models', count: rows.length },
+                ...costModelFilterOpts.map(c => ({ value: c, label: c, count: rows.filter(r => r.currentCostModel === c).length })),
+              ].map(opt => {
+                const isActive = filterCostModel === opt.value;
+                return (
+                  <div key={opt.value} onClick={() => setFilterCostModel(opt.value)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 20, cursor: 'pointer',
+                      background: isActive ? CYAN : '#F5F5F5',
+                      color: isActive ? 'white' : '#515254',
+                      fontWeight: isActive ? 700 : 400, fontSize: 12,
+                      transition: 'background 0.15s',
+                    }}>
+                    {opt.label}
+                    <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? 'rgba(255,255,255,0.8)' : '#BFBFBF', marginLeft: 2 }}>{opt.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <span style={{ marginLeft: 'auto', fontSize: 12, color: '#696F78' }}>
             {filtered.length} of {rows.length} line items
           </span>
@@ -751,71 +788,58 @@ export default function TechnologyShowbackDashboard() {
             r.actuals > 0 && r.actuals < 25_000 &&
             r.showbackType && r.showbackType !== 'None'
           );
-          const frameworkTiles = [
+          const belowThresholdTotal = belowThresholdRows.reduce((s, r) => s + r.actuals, 0);
+          const selDeptInfo  = selectedDept ? DEPTS.find(d => d.key === selectedDept) : null;
+          const selDeptRows  = selectedDept ? filtered.filter(r => (r[selectedDept] || 0) > 0) : [];
+          const selDeptTotal = selDeptRows.reduce((s, r) => s + (r[selectedDept] || 0), 0);
+          const selMethodAmt = (test) => selDeptRows.filter(r => test(r)).reduce((s, r) => s + (r[selectedDept] || 0), 0);
+          const selHcTotal   = selMethodAmt(r => (r.showbackType || '').toLowerCase().includes('headcount'));
+          const selConTotal  = selMethodAmt(r => (r.showbackType || '').toLowerCase().includes('consumption'));
+          const selCbTotal   = selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); const cm = (r.currentCostModel||'').toLowerCase(); return !st.includes('headcount') && !st.includes('consumption') && (st.includes('chargeback') || cm.includes('chargeback')); });
+          const selTopItems  = [...selDeptRows].sort((a,b) => (b[selectedDept]||0) - (a[selectedDept]||0)).slice(0, 5);
+          const selMethodLabel = (r) => { const st = (r.showbackType||'').toLowerCase(); if (st.includes('headcount')) return 'Headcount-based'; if (st.includes('consumption') && st.includes('chargeback')) return 'Consumption → Chargeback'; if (st.includes('consumption')) return 'Consumption-based'; if (st.includes('chargeback') || (r.currentCostModel||'').toLowerCase().includes('chargeback')) return 'Direct chargeback'; return 'Absorbed by Technology'; };
+          const approaches = [
             {
-              label: 'Chargeback',
-              sub: 'LOB-specific costs billed directly to departments',
-              color: '#DC642B',
-              rows: filtered.filter(r => (r.showbackType || '').toLowerCase() === 'chargeback' ||
-                                         (r.currentCostModel || '').toLowerCase().includes('chargeback')),
-            },
-            {
-              label: 'Showback — Consumption',
-              sub: 'Cloud & usage-based costs shown back by actual consumption',
-              color: CYAN,
-              rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('consumption')),
-            },
-            {
-              label: 'Showback — Headcount',
-              sub: 'Technology assets allocated proportional to headcount',
+              name: 'Headcount-Based Showback',
+              badge: 'Primary model',
               color: NAVY,
+              meta: 'Shared across all 12 LOBs proportional to FY2026 headcount',
               rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('headcount')),
             },
             {
-              label: 'Direct / No Showback',
-              sub: 'Costs absorbed by Technology, not yet shown back',
-              color: '#696F79',
+              name: 'Consumption-Based Showback',
+              badge: 'Growing',
+              color: CYAN,
+              meta: 'Azure + on-prem metering · allocated by actual consumption',
               rows: filtered.filter(r => {
                 const st = (r.showbackType || '').toLowerCase();
-                return !r.showbackType || st === 'none' || st.includes('no showback');
+                return st.includes('consumption') && !st.includes('chargeback');
+              }),
+            },
+            {
+              name: 'Consumption → Chargeback',
+              badge: 'Transitioning',
+              color: SLATE,
+              meta: 'Consumption showback for 1 year, then transitions to direct chargeback',
+              rows: filtered.filter(r => {
+                const st = (r.showbackType || '').toLowerCase();
+                return st.includes('consumption') && st.includes('chargeback');
+              }),
+            },
+            {
+              name: 'Direct Chargeback',
+              badge: 'LOB-specific',
+              color: '#DC642B',
+              meta: 'Hard-charged to owning LOB · confirmation required each cycle',
+              rows: filtered.filter(r => {
+                const st = (r.showbackType || '').toLowerCase();
+                const cm = (r.currentCostModel || '').toLowerCase();
+                return st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount'));
               }),
             },
           ];
           return (
           <div>
-            {/* PPT Framework tiles — mirrors Slide 4 (4-approach framework) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
-              {frameworkTiles.map((tile, i) => {
-                const tileTotal = tile.rows.reduce((s, r) => s + (r[period] || 0), 0);
-                return (
-                  <div key={i} style={card({ padding: '14px 18px', borderTop: `3px solid ${tile.color}` })}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: tile.color, textTransform: 'uppercase', letterSpacing: 0.6 }}>{tile.label}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: NAVY, margin: '6px 0 3px' }}>{cadShort(tileTotal)}</div>
-                    <div style={{ fontSize: 10, color: '#696F78', lineHeight: 1.4, marginBottom: 4 }}>{tile.sub}</div>
-                    <div style={{ fontSize: 10, color: '#BFBFBF' }}>{tile.rows.length} items · {pct(tileTotal, totalPeriod)}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* KPI cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
-              {[
-                { label: 'Total Actuals',        value: cadShort(totalActuals), sub: `Budget: ${cadShort(totalBudget)}`,                               accent: CYAN },
-                { label: 'Technology Share',     value: cadShort(techActuals),  sub: `${pct(techActuals, totalActuals)} of total actuals`,             accent: NAVY },
-                { label: 'Below $25K Threshold', value: belowThresholdRows.length,
-                  sub: belowThresholdRows.length > 0
-                    ? `${cadShort(belowThresholdRows.reduce((s,r)=>s+r.actuals,0))} shown back below materiality`
-                    : 'No items below threshold',
-                  accent: belowThresholdRows.length > 0 ? '#FF9800' : '#43A047' },
-              ].map((kpi, i) => (
-                <div key={i} style={card({ padding: '20px 22px', borderTop: `3px solid ${kpi.accent}` })}>
-                  <div style={{ fontSize: 11, color: '#696F78', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>{kpi.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, margin: '8px 0 4px' }}>{kpi.value}</div>
-                  <div style={{ fontSize: 11, color: '#696F78' }}>{kpi.sub}</div>
-                </div>
-              ))}
-            </div>
             {/* Coverage + Donut row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 16, marginBottom: 20 }}>
 
@@ -841,7 +865,7 @@ export default function TechnologyShowbackDashboard() {
                   </div>
                   <div style={{ fontSize: 12, color: '#696F79', lineHeight: 1.6 }}>
                     <strong style={{ color: NAVY }}>{cadShort(cmdShownBack)}</strong> of the{' '}
-                    <strong style={{ color: NAVY }}>{cadShort(totalPeriod)}</strong> Technology budget
+                    <strong style={{ color: NAVY }}>{cadShort(cmdCoverageBase)}</strong> Technology budget
                     is actively shown back or charged to LOBs.
                   </div>
                   <div style={{
@@ -934,29 +958,351 @@ export default function TechnologyShowbackDashboard() {
 
             </div>
 
-            {/* Department bar chart — full width */}
-            <div style={card({ padding: 22, marginBottom: 20 })}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Department Allocations</div>
-                <div style={{ fontSize: 11, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={deptTotals} layout="vertical" margin={{ left: 0, right: 56 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
-                    <XAxis type="number" tickFormatter={v => cadShort(v)} style={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" style={{ fontSize: 11 }} width={110} />
-                    <Tooltip cursor={false} formatter={(v) => cad(v)} contentStyle={TT} />
-                    <Bar dataKey="value" stroke="white" strokeWidth={1}
-                      activeBar={{ fill: CYAN, stroke: 'white', strokeWidth: 1 }}>
-                      {deptTotals.map((d, i) => (
-                        <Cell key={i} fill={d.isTech ? NAVY : '#BFBFBF'} />
-                      ))}
-                      <LabelList dataKey="value" position="right"
-                        formatter={v => cadShort(v)}
-                        style={{ fontSize: 10, fill: '#515254' }} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+            {/* Approach Breakdown — CTO mock style */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Showback Programme — Approach Breakdown</div>
+              <div style={{ fontSize: 11, color: '#696F79', marginTop: 2 }}>
+                How the {cadShort(cmdShownBack)} shown back is distributed across the four active allocation methods
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+              {approaches.map((ap, i) => {
+                const apTotal = ap.rows.reduce((s, r) => s + (r[period] || 0), 0);
+                const apPct = totalPeriod > 0 ? apTotal / totalPeriod * 100 : 0;
+                return (
+                  <div key={i} style={card({ padding: '18px 20px' })}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, paddingRight: 8 }}>{ap.name}</div>
+                      <div style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, flexShrink: 0,
+                        background: `${ap.color}1A`, color: ap.color,
+                      }}>{ap.badge}</div>
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2 }}>
+                      {cadShort(apTotal)}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>
+                      {apPct.toFixed(1)}% of total · {ap.rows.length} line items
+                    </div>
+                    <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+                      <div style={{ height: '100%', borderRadius: 3, background: ap.color, width: `${apPct}%` }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#696F79' }}>
+                      <span style={{ flex: 1 }}>{ap.meta}</span>
+                      <span style={{ fontWeight: 700, color: ap.color, flexShrink: 0, paddingLeft: 6 }}>{apPct.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* KPI cards — approach-card style */}
+            {(() => {
+              const thresholdColor = belowThresholdRows.length > 0 ? '#FF9800' : '#43A047';
+              const kpiCards = [
+                {
+                  name: 'Total Actuals',
+                  badge: periodLabel,
+                  color: CYAN,
+                  amount: cadShort(totalActuals),
+                  subLine: `${totalBudget > 0 ? (totalActuals / totalBudget * 100).toFixed(1) : '—'}% of budget · ${filtered.length} line items`,
+                  barPct: totalBudget > 0 ? Math.min(totalActuals / totalBudget * 100, 100) : 0,
+                  meta: `Budget: ${cadShort(totalBudget)}`,
+                  pctLabel: `${totalBudget > 0 ? (totalActuals / totalBudget * 100).toFixed(1) : '—'}%`,
+                },
+                {
+                  name: 'Technology Share',
+                  badge: 'Absorbed',
+                  color: NAVY,
+                  amount: cadShort(techActuals),
+                  subLine: `${pct(techActuals, totalActuals)} of total actuals · ${filtered.filter(r => r.technology > 0).length} line items`,
+                  barPct: totalActuals > 0 ? techActuals / totalActuals * 100 : 0,
+                  meta: 'Costs absorbed by Technology, not yet shown back',
+                  pctLabel: pct(techActuals, totalActuals),
+                },
+                {
+                  name: 'Below $25K Threshold',
+                  badge: 'Materiality',
+                  color: thresholdColor,
+                  amount: cadShort(belowThresholdTotal),
+                  subLine: `${totalPeriod > 0 ? (belowThresholdTotal / totalPeriod * 100).toFixed(1) : '—'}% of total · ${belowThresholdRows.length} line items`,
+                  barPct: totalPeriod > 0 ? belowThresholdTotal / totalPeriod * 100 : 0,
+                  meta: 'Per Slide 8 Action 3 — items shown back below threshold',
+                  pctLabel: `${totalPeriod > 0 ? (belowThresholdTotal / totalPeriod * 100).toFixed(1) : '—'}%`,
+                },
+              ];
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
+                  {kpiCards.map((k, i) => (
+                    <div key={i} style={card({ padding: '18px 20px' })}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, paddingRight: 8 }}>{k.name}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, flexShrink: 0, background: `${k.color}1A`, color: k.color }}>{k.badge}</div>
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2 }}>{k.amount}</div>
+                      <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>{k.subLine}</div>
+                      <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+                        <div style={{ height: '100%', borderRadius: 3, background: k.color, width: `${k.barPct}%` }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#696F79' }}>
+                        <span style={{ flex: 1 }}>{k.meta}</span>
+                        <span style={{ fontWeight: 700, color: k.color, flexShrink: 0, paddingLeft: 6 }}>{k.pctLabel}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Department Allocations + detail panel */}
+            <div style={{ display: 'grid', gridTemplateColumns: selectedDept ? '1.2fr 1fr' : '1fr', gap: 16, marginBottom: 20 }}>
+
+              {/* Custom bar list — matches viewer mock */}
+              <div style={card({ padding: '22px 24px' })}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>How Departments Compare</div>
+                <div style={{ fontSize: 11, color: '#696F79', marginBottom: 18 }}>
+                  Allocated technology cost by department for {periodLabel} — includes headcount showback, consumption showback, and chargeback
+                </div>
+                {(() => {
+                  const maxVal = deptTotals[0]?.value || 1;
+                  let rankIdx = 0;
+                  return deptTotals.map((d) => {
+                    const rank     = d.isTech ? '—' : ++rankIdx;
+                    const barPct   = d.value / maxVal * 100;
+                    const isSel    = selectedDept === d.key;
+                    const barColor = isSel ? CYAN : d.isTech ? NAVY : '#D0D0D0';
+                    return (
+                      <div key={d.key}
+                        onClick={() => !d.isTech && setSelectedDept(prev => prev === d.key ? null : d.key)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0',
+                          borderBottom: '1px solid #F8F8F8',
+                          cursor: d.isTech ? 'default' : 'pointer',
+                        }}
+                      >
+                        <div style={{ width: 18, fontSize: 10, color: '#BFBFBF', textAlign: 'right', flexShrink: 0 }}>{rank}</div>
+                        <div style={{ width: 124, fontSize: 12, fontWeight: isSel ? 700 : 400, fontStyle: d.isTech ? 'italic' : 'normal', color: isSel ? CYAN : d.isTech ? '#696F79' : NAVY, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {d.name}
+                        </div>
+                        <div style={{ flex: 1, height: 10, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${barPct}%`, background: barColor, borderRadius: 3, transition: 'background 0.15s' }} />
+                        </div>
+                        <div style={{ width: 54, textAlign: 'right', fontSize: 12, fontWeight: 700, color: isSel ? CYAN : NAVY, flexShrink: 0 }}>{cadShort(d.value)}</div>
+                        <div style={{ width: 36, textAlign: 'right', fontSize: 11, color: '#696F79', flexShrink: 0 }}>{pct(d.value, totalPeriod)}</div>
+                      </div>
+                    );
+                  });
+                })()}
+                <div style={{ marginTop: 14, fontSize: 11, color: '#BFBFBF' }}>
+                  Technology's absorbed cost ({cadShort(deptTotals.find(d => d.isTech)?.value || 0)}) is not charged to any department
+                </div>
+              </div>
+
+              {/* Detail panel */}
+              {selectedDept && selDeptInfo && (
+                <div style={card({ padding: '22px 24px', borderTop: `3px solid ${CYAN}` })}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{selDeptInfo.label} Department</div>
+                  <div style={{ fontSize: 11, color: '#696F79', marginBottom: 16 }}>Your allocated share for {periodLabel}</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: CYAN, letterSpacing: -1, marginBottom: 4 }}>{cadShort(selDeptTotal)}</div>
+                  <div style={{ fontSize: 12, color: '#696F79', marginBottom: 20 }}>{pct(selDeptTotal, totalPeriod)} of total Technology spend</div>
+
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#BFBFBF', marginBottom: 12 }}>Breakdown by Method</div>
+                  {[
+                    { label: 'Headcount showback',   amount: selHcTotal,  color: NAVY },
+                    { label: 'Consumption showback',  amount: selConTotal, color: CYAN },
+                    { label: 'Direct chargeback',     amount: selCbTotal,  color: '#DC642B' },
+                  ].filter(m => m.amount > 0).map((m, i) => (
+                    <div key={i} style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0, display: 'inline-block' }} />
+                          {m.label}
+                        </span>
+                        <span style={{ fontWeight: 700, color: NAVY }}>{cadShort(m.amount)}</span>
+                      </div>
+                      <div style={{ height: 5, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', background: m.color, borderRadius: 3, width: `${selDeptTotal > 0 ? m.amount / selDeptTotal * 100 : 0}%` }} />
+                      </div>
+                    </div>
+                  ))}
+
+                  {selTopItems.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, margin: '20px 0 12px' }}>What drives {selDeptInfo.label}'s bill</div>
+                      {selTopItems.map((r, i) => {
+                        const amt = r[selectedDept] || 0;
+                        const ml  = selMethodLabel(r);
+                        const ic  = ml.includes('Headcount') ? '👥' : ml.includes('Consumption') ? '☁️' : ml.includes('chargeback') ? '💳' : '📦';
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: i < selTopItems.length - 1 ? '1px solid #F0F0F0' : 'none' }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${getShowbackColor(r.showbackType)}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{ic}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.description || r.glCategory || '—'}</div>
+                              <div style={{ fontSize: 10, color: '#696F79', marginTop: 1 }}>{ml}</div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(amt)}</div>
+                              <div style={{ fontSize: 10, color: '#696F79' }}>{pct(amt, selDeptTotal)}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+          );
+        })()}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* COST MANAGEMENT                                                    */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'costmanagement' && rows.length > 0 && (() => {
+          const HL = {
+            yellow:  { bg: '#FFCD15', text: '#000000', bold: false },
+            pink:    { bg: '#FFB3B3', text: '#C00000', bold: true  },
+            green:   { bg: '#DAF2D0', text: '#000000', bold: false },
+            orange1: { bg: '#DC642B', text: '#FFFFFF', bold: false },
+            khaki:   { bg: '#C1B64E', text: '#000000', bold: false },
+            orange2: { bg: '#F68E47', text: '#000000', bold: false },
+          };
+          const getHL = (r) => {
+            const c = r.comments || '';
+            if (c.includes('no PD code'))              return 'yellow';
+            if (c.includes('Missing in Cost Model'))   return 'pink';
+            if (c.includes('two departments'))         return 'orange1';
+            if (c.includes('User Based Listing'))      return 'orange2';
+            if (c.includes('Check chargebacks'))       return 'khaki';
+            if (c.includes('PID not found in previous')) return 'green';
+            return null;
+          };
+          const LEGEND = [
+            { color: '#FFCD15', text: 'No PID Code — check description and reason' },
+            { color: '#FFB3B3', text: 'Missing master data in Cost Model — populate and rerun' },
+            { color: '#DAF2D0', text: 'PID not found in Cost Model — check if technology specific' },
+            { color: '#DC642B', text: 'Multiple absorber departments — check allocation logic' },
+            { color: '#C1B64E', text: 'Chargeback — verify if correct' },
+            { color: '#F68E47', text: 'User Based Listing not found — add user count' },
+          ];
+          const DEPT_COLS = [
+            { key: 'ceo',        label: 'CEO'        },
+            { key: 'legal',      label: 'Legal'      },
+            { key: 'hr',         label: 'HR'         },
+            { key: 'audit',      label: 'Audit'      },
+            { key: 'cdo',        label: 'CD&O'       },
+            { key: 'corpOps',    label: 'Corp Ops'   },
+            { key: 'finance',    label: 'Finance'    },
+            { key: 'technology', label: 'Technology' },
+            { key: 'io',         label: 'IO'         },
+            { key: 'irr',        label: 'IRR'        },
+            { key: 'isr',        label: 'ISR'        },
+            { key: 'cmci',       label: 'CM&CI'      },
+            { key: 'pe',         label: 'PE'         },
+          ];
+          const FIN_COLS = [
+            { key: 'actuals',   label: 'Actuals',                    year: `FY${baseYear}`      },
+            { key: 'budget',    label: 'Budget',                     year: `FY${baseYear}`      },
+            { key: 'forecast1', label: `FY${baseYear + 1} Forecast`, year: null                 },
+            { key: 'forecast2', label: `FY${baseYear + 2} Forecast`, year: null                 },
+          ];
+          const numFmt = (v) => v ? v.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+          const th = (extra = {}) => ({
+            background: NAVY, color: 'white', fontSize: 11, fontWeight: 700,
+            padding: '7px 9px', whiteSpace: 'nowrap', textAlign: 'center',
+            border: '1px solid rgba(255,255,255,0.15)', position: 'sticky', top: 0, zIndex: 2,
+            ...extra,
+          });
+          const td = (hl, extra = {}) => ({
+            fontSize: 11, padding: '4px 8px', border: '1px solid #EFEFEF',
+            background: hl ? HL[hl].bg : 'white',
+            color: hl ? HL[hl].text : '#2C2C2C',
+            fontWeight: hl && HL[hl].bold ? 700 : 400,
+            whiteSpace: 'nowrap',
+            ...extra,
+          });
+          return (
+            <div>
+              {/* Legend */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+                {LEGEND.map(l => (
+                  <div key={l.color} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#515254' }}>
+                    <div style={{ width: 13, height: 13, background: l.color, border: '1px solid rgba(0,0,0,0.12)', borderRadius: 2, flexShrink: 0 }} />
+                    {l.text}
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: '#696F79', marginBottom: 10 }}>
+                {filtered.length} rows · department allocations spread based on actuals
+              </div>
+              {/* Table */}
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 260px)', border: '1px solid #E0E0E0', borderRadius: 6 }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th style={th({ minWidth: 130 })}>Branch Name</th>
+                      <th style={th({ minWidth: 65 })}>G/L Code</th>
+                      <th style={th({ minWidth: 65 })}>Branch Code</th>
+                      <th style={th({ minWidth: 75 })}>PID</th>
+                      <th style={th({ minWidth: 110 })}>GL Category</th>
+                      <th style={th({ minWidth: 120 })}>Cost Model Category</th>
+                      <th style={th({ minWidth: 200, textAlign: 'left' })}>Description</th>
+                      <th style={th({ minWidth: 90 })}>Required</th>
+                      <th style={th({ minWidth: 160, textAlign: 'left' })}>Current Cost Model</th>
+                      <th style={th({ minWidth: 80 })}>Allocation</th>
+                      <th style={th({ minWidth: 150, textAlign: 'left' })}>Future Cost Model</th>
+                      <th style={th({ minWidth: 170, textAlign: 'left' })}>Showback Type</th>
+                      {FIN_COLS.map(f => (
+                        <th key={f.key} style={th({ minWidth: 95, background: period === f.key ? CYAN : NAVY })}>
+                          {f.year ? (
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.75, marginBottom: 1 }}>{f.year}</div>
+                              <div>{f.label}</div>
+                            </div>
+                          ) : f.label}
+                        </th>
+                      ))}
+                      {DEPT_COLS.map(d => (
+                        <th key={d.key} style={th({ minWidth: 85 })}>{d.label}</th>
+                      ))}
+                      <th style={th({ minWidth: 260, textAlign: 'left' })}>Comments</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r, i) => {
+                      const hl = getHL(r);
+                      return (
+                        <tr key={i}>
+                          <td style={td(hl)}>{r.branch || '—'}</td>
+                          <td style={td(hl, { fontFamily: 'monospace' })}>{r.glCode || '—'}</td>
+                          <td style={td(hl, { fontFamily: 'monospace' })}>{r.branchCode || '—'}</td>
+                          <td style={td(hl, { fontFamily: 'monospace' })}>{r.pid || '—'}</td>
+                          <td style={td(hl)}>{r.glCategory || '—'}</td>
+                          <td style={td(hl)}>{r.costModelCategory || '—'}</td>
+                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 220 })}>{r.description || '—'}</td>
+                          <td style={td(hl)}>{r.required || '—'}</td>
+                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 180 })}>{r.currentCostModel || '—'}</td>
+                          <td style={td(hl)}>{r.allocation || '—'}</td>
+                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 180 })}>{r.futureCostModel || '—'}</td>
+                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 190 })}>{r.showbackType || '—'}</td>
+                          {FIN_COLS.map(f => (
+                            <td key={f.key} style={td(hl, {
+                              textAlign: 'right',
+                              background: period === f.key ? (hl ? HL[hl].bg : `${CYAN}22`) : (hl ? HL[hl].bg : 'white'),
+                            })}>{numFmt(r[f.key])}</td>
+                          ))}
+                          {DEPT_COLS.map(d => (
+                            <td key={d.key} style={td(hl, { textAlign: 'right' })}>{numFmt(r[d.key])}</td>
+                          ))}
+                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 280, fontSize: 10, color: hl ? HL[hl].text : '#696F79' })}>{r.comments || ''}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           );
         })()}
 

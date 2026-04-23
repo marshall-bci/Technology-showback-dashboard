@@ -11,11 +11,13 @@ User Listing columns F-R (UL indices 0-12):
   6=Finance, 7=Technology, 8=IO, 9=IRR, 10=PE, 11=CM&CI, 12=ISR
 """
 
-DEPT_KEYS = ['CEO', 'Legal', 'HR', 'Audit', 'CD&O', 'Finance',
+DEPT_KEYS = ['CEO', 'Legal', 'HR', 'Audit', 'CD&O', 'Corp Ops', 'Finance',
              'Technology', 'IO', 'IRR', 'ISR', 'CM&CI', 'PE']
 
-OUT_KEYS = ['ceo', 'legal', 'hr', 'audit', 'cdoCorpOps', 'finance',
+OUT_KEYS = ['ceo', 'legal', 'hr', 'audit', 'cdo', 'corpOps', 'finance',
             'technology', 'io', 'irr', 'isr', 'cmci', 'pe']
+
+_N_DEPTS = len(DEPT_KEYS)  # 13
 
 
 # ── OC cell parsing (port of FindAccountDash + FindLastLevelDash) ─────────────
@@ -209,24 +211,19 @@ def compute_allocation(row: dict, cm_index: dict, hc_index: dict,
         if dk.lower() in absorber_lower:
             abs_idx = i
             break
-    if 'corp ops' in absorber_lower:
-        abs_idx = 4  # CD&O slot
 
     # ── Step 4: Participants from allocation column ───────────────────────────
     alloc_val = row['allocation']
     k_is_all  = alloc_val.lower() == 'all' or alloc_val == ''
-    participants = [True] * 12 if k_is_all else [False] * 12
+    participants = [True] * _N_DEPTS if k_is_all else [False] * _N_DEPTS
 
     if not k_is_all:
-        parts = [p.strip() for p in alloc_val.split(',')]
-        for pt in parts:
-            pt_lower = pt.lower()
+        for pt in alloc_val.split(','):
+            pt_lower = pt.strip().lower()
             for i, dk in enumerate(DEPT_KEYS):
                 if pt_lower == dk.lower():
                     participants[i] = True
                     break
-            if pt_lower == 'corp ops':
-                participants[4] = True
 
     if alloc_val == '' and is_direct:
         comments += 'Column K (Allocation) is empty. Delete and rerun after updating Column J in Cost Model. Ignore if correct. '
@@ -234,31 +231,21 @@ def compute_allocation(row: dict, cm_index: dict, hc_index: dict,
     abs_in_list = abs_idx >= 0 and participants[abs_idx]
 
     # ── Step 6: Department counts ─────────────────────────────────────────────
-    hc_cdo     = hc_index.get('CD&O', 0.0)
-    hc_corp_ops = hc_index.get('Corp Ops', 0.0)
-    dept_count  = [0.0] * 12
-    ul_ok       = False
-    ul_data     = None
+    # UL order (0-12): CEO, Legal, CorpOps, HR, Audit, CD&O, Finance, Tech, IO, IRR, PE, CM&CI, ISR
+    # DEPT_KEYS order: CEO, Legal, HR, Audit, CD&O, Corp Ops, Finance, Tech, IO, IRR, ISR, CM&CI, PE
+    UL_TO_DEPT = [0, 1, 3, 4, 5, 2, 6, 7, 8, 9, 12, 11, 10]  # ul_data index for each DEPT_KEYS slot
+
+    dept_count = [0.0] * _N_DEPTS
+    ul_ok      = False
+    ul_data    = None
 
     if use_user_list:
         ul_data = ul_index.get(lookup_key)
         if ul_data:
-            # Map UL (0-12) → output (0-11)
-            dept_count[0]  = ul_data[0]              # CEO
-            dept_count[1]  = ul_data[1]              # Legal
-            dept_count[2]  = ul_data[3]              # HR
-            dept_count[3]  = ul_data[4]              # Audit
-            dept_count[4]  = ul_data[5] + ul_data[2] # CD&O + CorpOps
-            dept_count[5]  = ul_data[6]              # Finance
-            dept_count[6]  = ul_data[7]              # Technology
-            dept_count[7]  = ul_data[8]              # IO
-            dept_count[8]  = ul_data[9]              # IRR
-            dept_count[9]  = ul_data[12]             # ISR
-            dept_count[10] = ul_data[11]             # CM&CI
-            dept_count[11] = ul_data[10]             # PE
-
+            for i, ul_i in enumerate(UL_TO_DEPT):
+                dept_count[i] = ul_data[ul_i] if ul_i < len(ul_data) else 0.0
             if all(c == 0 for c in dept_count):
-                suffix = ('Chargeback - ' if is_chargeback else '')
+                suffix = 'Chargeback - ' if is_chargeback else ''
                 comments += (f"{suffix}User Based Listing has no user counts for this product. "
                              "Please add user count in the User Based Listing sheet and rerun, "
                              "or remove 'Cost allocated based on user listing' from Cost Model column M and rerun. ")
@@ -267,7 +254,7 @@ def compute_allocation(row: dict, cm_index: dict, hc_index: dict,
                 return row
             ul_ok = True
         else:
-            suffix = ('Chargeback - ' if is_chargeback else '')
+            suffix = 'Chargeback - ' if is_chargeback else ''
             comments += (f"{suffix}User Based Listing not found for this product. "
                          "Please add user count in the User Based Listing sheet and rerun. ")
             row.update(zero_alloc)
@@ -275,30 +262,14 @@ def compute_allocation(row: dict, cm_index: dict, hc_index: dict,
             return row
     else:
         for i, dk in enumerate(DEPT_KEYS):
-            if i == 4:
-                dept_count[i] = hc_cdo + hc_corp_ops
-            else:
-                dept_count[i] = hc_index.get(dk, 0.0)
-
-    # ── Step 6b: CD&O / Corp Ops split when not "all" ────────────────────────
-    part_comment = ''
-    if participants[4] and not k_is_all:
-        parts_lower = [p.strip().lower() for p in alloc_val.split(',')]
-        has_cdo = 'cd&o' in parts_lower
-        has_co  = 'corp ops' in parts_lower
-        if has_cdo and not has_co:
-            dept_count[4] = ul_data[5] if (use_user_list and ul_ok and ul_data) else hc_cdo
-            part_comment = 'Only CD&O allocated (not Corp Ops). '
-        elif has_co and not has_cdo:
-            dept_count[4] = ul_data[2] if (use_user_list and ul_ok and ul_data) else hc_corp_ops
-            part_comment = 'Only Corp Ops allocated (not CD&O). '
+            dept_count[i] = hc_index.get(dk, 0.0)
 
     # ── Step 7: Calculate allocations ────────────────────────────────────────
-    alloc       = [0.0] * 12
+    alloc       = [0.0] * _N_DEPTS
     total_denom = 0.0
     sum_alloc   = 0.0
 
-    for i in range(12):
+    for i in range(_N_DEPTS):
         if participants[i]:
             if abs_in_list:
                 total_denom += dept_count[i]
@@ -306,15 +277,13 @@ def compute_allocation(row: dict, cm_index: dict, hc_index: dict,
                 total_denom += dept_count[i]
 
     if total_denom > 0 and spread_amount != 0:
-        for i in range(12):
+        for i in range(_N_DEPTS):
             if participants[i] and i != abs_idx:
                 alloc[i] = (dept_count[i] / total_denom) * spread_amount
                 sum_alloc += alloc[i]
         if abs_idx >= 0 and abs_in_list:
             alloc[abs_idx] = spread_amount - sum_alloc
 
-    if part_comment:
-        comments += part_comment
     if is_chargeback:
         comments += 'Check chargebacks, if correct. '
 

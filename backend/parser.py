@@ -176,19 +176,40 @@ def _load_oc_data(ws, db):
         except (ValueError, TypeError):
             return 0.0
 
+    # Auto-detect leaf indent level — scan up to 500 rows and take the maximum
+    # indent seen. This handles files where the leaf level is 3 or differs.
+    indent_counts: dict[int, int] = {}
+    for r in range(4, min(ws.max_row + 1, 500)):
+        cell = ws.cell(row=r, column=1)
+        if not cell.value:
+            continue
+        lvl = int((cell.alignment.indent if cell.alignment else 0) or 0)
+        if lvl > 0:
+            indent_counts[lvl] = indent_counts.get(lvl, 0) + 1
+    leaf_indent = max(indent_counts) if indent_counts else 3
+
+    # Column layout (after user added col C to OC Data Refresh):
+    #   B(2) = Actuals (current FY)
+    #   C(3) = Budget  (current FY)
+    #   D(4) = Forecast 1 (next FY)
+    #   E(5) = Forecast 2 (FY+2)
+    #   F(6) = ignored
     for row_idx in range(4, ws.max_row + 1):
         cell_a = ws.cell(row=row_idx, column=1)
         val = cell_a.value
         if not val:
             continue
-        # Only process indent-level-3 cells (leaf level in OC hierarchy)
-        indent = (cell_a.alignment.indent if cell_a.alignment else 0) or 0
-        if indent != 3:
+        lvl = int((cell_a.alignment.indent if cell_a.alignment else 0) or 0)
+        if lvl != leaf_indent:
             continue
-        a, b, c, d = (_n(ws.cell(row=row_idx, column=col).value) for col in (2, 3, 4, 5))
-        if a == 0 and b == 0 and c == 0 and d == 0:
+        actuals = _n(ws.cell(row=row_idx, column=2).value)
+        budget  = _n(ws.cell(row=row_idx, column=3).value)
+        f1      = _n(ws.cell(row=row_idx, column=4).value)
+        f2      = _n(ws.cell(row=row_idx, column=5).value)
+        if actuals == 0 and budget == 0 and f1 == 0 and f2 == 0:
             continue
-        db.add(OcRawRow(oc_cell=str(val).strip(), actuals=a, forecast1=b, forecast2=c, budget=d))
+        db.add(OcRawRow(oc_cell=str(val).strip(),
+                        actuals=actuals, budget=budget, forecast1=f1, forecast2=f2))
 
     db.commit()
 
@@ -235,7 +256,7 @@ def _parse_management_tab_fallback(wb) -> dict:
             'futureCostModel': s(12), 'showbackType': s(13),
             'actuals': actuals, 'forecast1': f1, 'forecast2': f2, 'budget': budget,
             'ceo': n(18), 'legal': n(19), 'hr': n(20), 'audit': n(21),
-            'cdoCorpOps': n(22), 'finance': n(23), 'technology': n(24),
+            'cdo': n(22) * 0.5, 'corpOps': n(22) * 0.5, 'finance': n(23), 'technology': n(24),
             'io': n(25), 'irr': n(26), 'isr': n(27), 'cmci': n(28), 'pe': n(29),
             'comments': s(30),
         })
