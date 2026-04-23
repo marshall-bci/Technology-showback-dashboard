@@ -17,8 +17,9 @@ class User(Base):
     id            = Column(Integer, primary_key=True, index=True)
     email         = Column(String, unique=True, index=True, nullable=False)
     display_name  = Column(String, default="")
-    is_admin      = Column(Boolean, default=False)
-    is_active     = Column(Boolean, default=True)
+    is_admin               = Column(Boolean, default=False)
+    is_active              = Column(Boolean, default=True)
+    can_edit_user_listing  = Column(Boolean, default=False)
     # Empty list = no access. Admins bypass this check entirely.
     allowed_gl_codes  = Column(JSON, default=list)
     allowed_branches  = Column(JSON, default=list)
@@ -63,11 +64,14 @@ class HeadcountEntry(Base):
     short_code = Column(String, index=True, default="")
     dept_name  = Column(String, default="")
     fy2026     = Column(Float, default=0.0)
+    fy2027     = Column(Float, default=0.0)
+    fy2028     = Column(Float, default=0.0)
 
 
 class UserListingEntry(Base):
     __tablename__ = "user_listing"
     id          = Column(Integer, primary_key=True)
+    branch_name = Column(String, default="")
     branch_code = Column(String, default="")
     gl_code     = Column(String, default="")
     pid         = Column(String, index=True, default="")

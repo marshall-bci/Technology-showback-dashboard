@@ -21,6 +21,26 @@ from logger import log_access
 # Create DB tables on startup
 Base.metadata.create_all(bind=engine)
 
+# Migrate: add fy2027/fy2028 to headcount if upgrading from older schema
+from sqlalchemy import text as _sql_text
+with engine.connect() as _c:
+    for _col in ['fy2027', 'fy2028']:
+        try:
+            _c.execute(_sql_text(f'ALTER TABLE headcount ADD COLUMN {_col} FLOAT DEFAULT 0.0'))
+            _c.commit()
+        except Exception:
+            pass
+    try:
+        _c.execute(_sql_text("ALTER TABLE user_listing ADD COLUMN branch_name TEXT DEFAULT ''"))
+        _c.commit()
+    except Exception:
+        pass
+    try:
+        _c.execute(_sql_text("ALTER TABLE users ADD COLUMN can_edit_user_listing BOOLEAN DEFAULT 0"))
+        _c.commit()
+    except Exception:
+        pass
+
 app = FastAPI(
     title="Technology Showback Dashboard API",
     version="1.0.0",
@@ -117,6 +137,7 @@ async def create_user(request: Request, user_in: UserCreate,
         email=user_in.email.lower(),
         display_name=user_in.display_name or user_in.email.split("@")[0],
         is_admin=user_in.is_admin,
+        can_edit_user_listing=user_in.can_edit_user_listing,
         allowed_gl_codes=user_in.allowed_gl_codes,
         allowed_branches=user_in.allowed_branches,
     )
@@ -206,7 +227,24 @@ async def list_headcount(current_user: User = Depends(require_admin),
                          db: Session = Depends(get_db)):
     rows = db.query(HeadcountEntry).order_by(HeadcountEntry.short_code).all()
     return [{"id": r.id, "deptCode": r.dept_code, "shortCode": r.short_code,
-             "deptName": r.dept_name, "fy2026": r.fy2026} for r in rows]
+             "deptName": r.dept_name,
+             "fy2026": r.fy2026, "fy2027": r.fy2027, "fy2028": r.fy2028} for r in rows]
+
+
+@app.post("/admin/headcount", status_code=201)
+async def create_headcount(body: dict,
+                            current_user: User = Depends(require_admin),
+                            db: Session = Depends(get_db)):
+    entry = HeadcountEntry(
+        dept_code  = str(body.get("deptCode", "")),
+        short_code = str(body.get("shortCode", "")),
+        dept_name  = str(body.get("deptName", "")),
+        fy2026     = float(body.get("fy2026", 0) or 0),
+        fy2027     = float(body.get("fy2027", 0) or 0),
+        fy2028     = float(body.get("fy2028", 0) or 0),
+    )
+    db.add(entry); db.commit(); db.refresh(entry)
+    return {"ok": True, "id": entry.id}
 
 
 @app.put("/admin/headcount/{entry_id}")
@@ -216,24 +254,46 @@ async def update_headcount(entry_id: int, body: dict,
     entry = db.query(HeadcountEntry).filter(HeadcountEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(404, "Headcount entry not found")
-    if "fy2026" in body:
-        try:
-            entry.fy2026 = float(body["fy2026"])
-        except (ValueError, TypeError):
-            raise HTTPException(400, "fy2026 must be a number")
+    if "deptCode"  in body: entry.dept_code  = str(body["deptCode"])
+    if "shortCode" in body: entry.short_code = str(body["shortCode"])
+    if "deptName"  in body: entry.dept_name  = str(body["deptName"])
+    for yr in ("fy2026", "fy2027", "fy2028"):
+        if yr in body:
+            try:
+                setattr(entry, yr, float(body[yr]))
+            except (ValueError, TypeError):
+                raise HTTPException(400, f"{yr} must be a number")
     db.commit()
+    return {"ok": True}
+
+
+@app.delete("/admin/headcount/{entry_id}")
+async def delete_headcount(entry_id: int,
+                            current_user: User = Depends(require_admin),
+                            db: Session = Depends(get_db)):
+    entry = db.query(HeadcountEntry).filter(HeadcountEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(404, "Headcount entry not found")
+    db.delete(entry); db.commit()
     return {"ok": True}
 
 
 # ── Admin: User Listing reference table ───────────────────────────────────────
 @app.get("/admin/user-listing")
-async def list_user_listing(current_user: User = Depends(require_admin),
+async def list_user_listing(current_user: User = Depends(get_current_user),
                              db: Session = Depends(get_db)):
-    rows = db.query(UserListingEntry).order_by(UserListingEntry.pid).all()
+    if not current_user.is_admin and not current_user.can_edit_user_listing:
+        raise HTTPException(403, "Admin or User Listing edit access required")
+    query = db.query(UserListingEntry)
+    if not current_user.is_admin and current_user.can_edit_user_listing:
+        branches = [b.upper() for b in (current_user.allowed_branches or [])]
+        if branches:
+            query = query.filter(UserListingEntry.branch_code.in_(branches))
+    rows = query.order_by(UserListingEntry.pid).all()
     return [
         {
-            "id": r.id, "branchCode": r.branch_code, "glCode": r.gl_code,
-            "pid": r.pid, "description": r.description,
+            "id": r.id, "branchName": r.branch_name, "branchCode": r.branch_code,
+            "glCode": r.gl_code, "pid": r.pid, "description": r.description,
             "ceo": r.ceo, "legal": r.legal, "corpOps": r.corp_ops, "hr": r.hr,
             "audit": r.audit, "cdo": r.cdo, "finance": r.finance,
             "technology": r.technology, "io": r.io, "irr": r.irr,
@@ -245,11 +305,17 @@ async def list_user_listing(current_user: User = Depends(require_admin),
 
 @app.put("/admin/user-listing/{entry_id}")
 async def update_user_listing(entry_id: int, body: dict,
-                               current_user: User = Depends(require_admin),
+                               current_user: User = Depends(get_current_user),
                                db: Session = Depends(get_db)):
+    if not current_user.is_admin and not current_user.can_edit_user_listing:
+        raise HTTPException(403, "Admin or User Listing edit access required")
     entry = db.query(UserListingEntry).filter(UserListingEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(404, "User listing entry not found")
+    if not current_user.is_admin and current_user.can_edit_user_listing:
+        branches = [b.upper() for b in (current_user.allowed_branches or [])]
+        if branches and entry.branch_code.upper() not in branches:
+            raise HTTPException(403, "You can only edit User Listing entries for your branches")
     field_map = {
         "ceo": "ceo", "legal": "legal", "corpOps": "corp_ops", "hr": "hr",
         "audit": "audit", "cdo": "cdo", "finance": "finance",
@@ -276,8 +342,9 @@ async def recalculate(request: Request, current_user: User = Depends(require_adm
         body = await request.json()
     except Exception:
         pass
-    period = body.get("period", "actuals")
-    rows = run_allocation(db, period=period)
+    period   = body.get("period", "actuals")
+    hc_year  = body.get("headcountYear", "fy2026")
+    rows = run_allocation(db, period=period, hc_year=hc_year)
     if not rows:
         raise HTTPException(400, "No OC data in database — upload a workbook first")
     payload = _load_data()

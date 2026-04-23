@@ -58,10 +58,18 @@ const DEPT_COLORS = [
 ];
 
 const SHOWBACK_COLORS = {
-  'None':        '#BFBFBF', // BCI Gray 3 — de-emphasis
-  'Headcount':   '#00365B', // BCI Midnight
-  'Consumption': '#00ABBD', // BCI Ocean
-  'Chargeback':  '#DC642B', // BCI Orange
+  'None':        '#BFBFBF',
+  'Headcount':   '#00365B',
+  'Consumption': '#00ABBD',
+  'Chargeback':  '#DC642B',
+};
+const getShowbackColor = (st) => {
+  if (!st) return '#BFBFBF';
+  const s = st.toLowerCase();
+  if (s.includes('chargeback'))  return '#DC642B';
+  if (s.includes('consumption')) return '#00ABBD';
+  if (s.includes('headcount'))   return '#00365B';
+  return '#BFBFBF';
 };
 
 const PERIODS = [
@@ -77,6 +85,7 @@ const ALL_TABS = [
   { id: 'showback',    label: 'By Showback Type'  },
   { id: 'technology',  label: 'Technology Detail' },
   { id: 'quality',     label: 'Data Quality'      },
+  { id: 'userlisting', label: 'My User Listing',  canEditUL: true },
   { id: 'upload',      label: 'Upload (Test)',     adminOnly: true },
   { id: 'admin',       label: 'Admin',             adminOnly: true },
 ];
@@ -145,8 +154,9 @@ export default function TechnologyShowbackDashboard() {
   const [adminTab,        setAdminTab]        = useState('users');
   const [userFormEmail,   setUserFormEmail]   = useState('');
   const [userFormName,    setUserFormName]    = useState('');
-  const [userFormAdmin,   setUserFormAdmin]   = useState(false);
-  const [userFormGLs,     setUserFormGLs]     = useState('');
+  const [userFormAdmin,      setUserFormAdmin]      = useState(false);
+  const [userFormCanEditUL,  setUserFormCanEditUL]  = useState(false);
+  const [userFormGLs,        setUserFormGLs]        = useState('');
   const [userFormBranch,  setUserFormBranch]  = useState('');
   const [adminMsg,        setAdminMsg]        = useState('');
   const [editingUser,     setEditingUser]     = useState(null);
@@ -154,10 +164,22 @@ export default function TechnologyShowbackDashboard() {
   const [editingCmData,   setEditingCmData]   = useState({});
   const [openCombo,       setOpenCombo]       = useState(null);
   const [comboQuery,      setComboQuery]      = useState('');
+  const [editingHcId,     setEditingHcId]     = useState(null);
+  const [editingHcData,   setEditingHcData]   = useState({});
+  const [deletingHcId,    setDeletingHcId]    = useState(null);
+  const [newHcRow,        setNewHcRow]        = useState(null);
   const [editingUlId,     setEditingUlId]     = useState(null);
   const [editingUlData,   setEditingUlData]   = useState({});
   const [recalcStatus,    setRecalcStatus]    = useState('');
   const [recalcing,       setRecalcing]       = useState(false);
+  const [recalcHcYear,    setRecalcHcYear]    = useState('fy2026');
+  const [hcYearTypes,     setHcYearTypes]     = useState(() => {
+    try { return JSON.parse(localStorage.getItem('hcYearTypes')) || {}; } catch { return {}; }
+  });
+  const [baseYear,        setBaseYear]        = useState(() => {
+    const y = parseInt(localStorage.getItem('hcBaseYear'));
+    return isNaN(y) ? 2026 : y;
+  });
   const [resetModalOpen,  setResetModalOpen]  = useState(false);
   const [resetTyped,      setResetTyped]      = useState('');
 
@@ -273,15 +295,29 @@ export default function TechnologyShowbackDashboard() {
     loadAdminLogs();
   }, [user, activeTab, loadAdminUsers, loadAdminLogs]);
 
+  // Load reference tables on login (powers filter dropdowns for all tabs)
+  useEffect(() => {
+    if (!user?.is_admin) return;
+    loadAdminCostModel();
+    loadAdminHeadcount();
+  }, [user, loadAdminCostModel, loadAdminHeadcount]);
+
   useEffect(() => {
     if (!user?.is_admin || activeTab !== 'admin') return;
-    if (adminTab === 'costmodel') loadAdminCostModel();
+    if (adminTab === 'costmodel') { loadAdminCostModel(); if (!adminHeadcount.length) loadAdminHeadcount(); }
     if (adminTab === 'headcount') loadAdminHeadcount();
     if (adminTab === 'userlisting') loadAdminUserList();
   }, [user, activeTab, adminTab, loadAdminCostModel, loadAdminHeadcount, loadAdminUserList]);
 
+  useEffect(() => {
+    if (activeTab === 'userlisting' && user?.can_edit_user_listing && !user?.is_admin) {
+      loadAdminUserList();
+    }
+  }, [user, activeTab, loadAdminUserList]);
+
   const resetUserForm = () => {
     setUserFormEmail(''); setUserFormName(''); setUserFormAdmin(false);
+    setUserFormCanEditUL(false);
     setUserFormGLs(''); setUserFormBranch(''); setEditingUser(null); setAdminMsg('');
   };
 
@@ -289,6 +325,7 @@ export default function TechnologyShowbackDashboard() {
     setUserFormEmail(u.email);
     setUserFormName(u.display_name || '');
     setUserFormAdmin(u.is_admin);
+    setUserFormCanEditUL(u.can_edit_user_listing || false);
     setUserFormGLs((u.allowed_gl_codes || []).join(', '));
     setUserFormBranch((u.allowed_branches || []).join(', '));
     setEditingUser(u.email);
@@ -298,11 +335,12 @@ export default function TechnologyShowbackDashboard() {
   const submitUserForm = async () => {
     if (!userFormEmail.trim()) { setAdminMsg('Email is required.'); return; }
     const payload = {
-      email:            userFormEmail.trim().toLowerCase(),
-      display_name:     userFormName.trim() || undefined,
-      is_admin:         userFormAdmin,
-      allowed_gl_codes: userFormGLs.split(',').map(s => s.trim()).filter(Boolean),
-      allowed_branches: userFormBranch.split(',').map(s => s.trim()).filter(Boolean),
+      email:                  userFormEmail.trim().toLowerCase(),
+      display_name:           userFormName.trim() || undefined,
+      is_admin:               userFormAdmin,
+      can_edit_user_listing:  userFormCanEditUL,
+      allowed_gl_codes:       userFormGLs.split(',').map(s => s.trim()).filter(Boolean),
+      allowed_branches:       userFormBranch.split(',').map(s => s.trim()).filter(Boolean),
     };
     const url    = editingUser ? `${API_URL}/admin/users/${encodeURIComponent(editingUser)}` : `${API_URL}/admin/users`;
     const method = editingUser ? 'PUT' : 'POST';
@@ -342,17 +380,8 @@ export default function TechnologyShowbackDashboard() {
   // ── Filtered rows ───────────────────────────────────────────────────────────
   const filtered = rows.filter(r => {
     if (filterShowback !== 'All' && (r.showbackType || 'None') !== filterShowback) return false;
-    if (filterCostModel !== 'All') {
-      const cm = (r.currentCostModel || '').toLowerCase();
-      if (filterCostModel === 'Chargeback'         && !cm.includes('chargeback'))        return false;
-      if (filterCostModel === 'Direct Allocation'  && !cm.includes('direct allocation')) return false;
-      if (filterCostModel === 'Spread Allocation'  && !cm.includes('spread'))            return false;
-      if (filterCostModel === 'Showback'           && !cm.includes('showback'))          return false;
-    }
-    if (filterDept !== 'All') {
-      const dk = DEPTS.find(d => d.label === filterDept)?.key;
-      if (dk && !r[dk]) return false;
-    }
+    if (filterCostModel !== 'All' && r.currentCostModel !== filterCostModel) return false;
+    if (filterDept !== 'All' && !r[filterDept]) return false;
     return true;
   });
 
@@ -380,9 +409,29 @@ export default function TechnologyShowbackDashboard() {
     isTech: d.key === 'technology',
   })).sort((a, b) => b.value - a.value);
 
-  const showbackTypes    = [...new Set(rows.map(r => r.showbackType || 'None'))];
-  const uniqueShowbacks  = [...new Set(rows.map(r => r.showbackType || 'None'))];
-  const periodLabel      = PERIODS.find(p => p.key === period)?.label || period;
+  const showbackTypes   = [...new Set(rows.map(r => r.showbackType || 'None'))];
+  const uniqueShowbacks = [...new Set(rows.map(r => r.showbackType || 'None'))];
+
+  const dynamicPeriods = [
+    { key: 'actuals',   label: `FY${baseYear} (${hcYearTypes['fy2026'] || 'Actual'})` },
+    { key: 'forecast1', label: `FY${baseYear + 1} (${hcYearTypes['fy2027'] || 'Forecast'})` },
+    { key: 'forecast2', label: `FY${baseYear + 2} (${hcYearTypes['fy2028'] || 'Forecast'})` },
+    { key: 'budget',    label: 'Budget' },
+  ];
+  const periodLabel = dynamicPeriods.find(p => p.key === period)?.label || period;
+
+  const showbackFilterOpts = adminCostModel.length > 0
+    ? [...new Set(adminCostModel.map(r => r.showbackType).filter(Boolean))].sort()
+    : uniqueShowbacks;
+
+  const costModelFilterOpts = adminCostModel.length > 0
+    ? [...new Set(adminCostModel.map(r => r.currentCostModel).filter(Boolean))].sort()
+    : [...new Set(rows.map(r => r.currentCostModel).filter(Boolean))].sort();
+
+  const deptFilterOpts = DEPTS.map(d => {
+    const hc = adminHeadcount.find(h => h.shortCode?.toLowerCase() === d.key?.toLowerCase());
+    return { value: d.key, label: hc ? (hc.deptName || d.label) : d.label };
+  });
 
   const showbackChartData = Object.values(
     filtered.reduce((acc, r) => {
@@ -396,7 +445,11 @@ export default function TechnologyShowbackDashboard() {
 
   const techRows    = filtered.filter(r => r.technology > 0 || r.currentCostModel.toLowerCase().includes('chargeback'));
   const flaggedRows = rows.filter(r => r.comments);
-  const TABS        = ALL_TABS.filter(t => !t.adminOnly || user?.is_admin);
+  const TABS = ALL_TABS.filter(t => {
+    if (t.adminOnly) return user?.is_admin;
+    if (t.canEditUL) return user?.can_edit_user_listing && !user?.is_admin;
+    return true;
+  });
 
   // ─── Login screen ────────────────────────────────────────────────────────────
   if (!authChecked) {
@@ -569,17 +622,17 @@ export default function TechnologyShowbackDashboard() {
       </div>
 
       {/* ── Global Filters ─────────────────────────────────────────────────────── */}
-      {!['upload', 'quality', 'admin'].includes(activeTab) && (
+      {!['upload', 'quality', 'admin', 'userlisting'].includes(activeTab) && (
         <div style={{
           background: 'white', borderBottom: '1px solid #E8E8E8',
           padding: '10px 32px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>Filters</span>
           {[
-            { label: 'Period',     value: period,          setter: setPeriod,          options: PERIODS.map(p => ({ value: p.key, label: p.label })) },
-            { label: 'Showback',   value: filterShowback,  setter: setFilterShowback,  options: [{ value: 'All', label: 'All' }, ...uniqueShowbacks.map(s => ({ value: s, label: s }))] },
-            { label: 'Cost Model', value: filterCostModel, setter: setFilterCostModel, options: [{ value: 'All', label: 'All' }, { value: 'Direct Allocation', label: 'Direct Allocation' }, { value: 'Spread Allocation', label: 'Spread Allocation' }, { value: 'Showback', label: 'Showback' }, { value: 'Chargeback', label: 'Chargeback' }] },
-            { label: 'Department', value: filterDept,      setter: setFilterDept,      options: [{ value: 'All', label: 'All' }, ...DEPTS.map(d => ({ value: d.label, label: d.label }))] },
+            { label: 'Period',     value: period,          setter: setPeriod,          options: dynamicPeriods.map(p => ({ value: p.key, label: p.label })) },
+            { label: 'Showback',   value: filterShowback,  setter: setFilterShowback,  options: [{ value: 'All', label: 'All' }, ...showbackFilterOpts.map(s => ({ value: s, label: s }))] },
+            { label: 'Cost Model', value: filterCostModel, setter: setFilterCostModel, options: [{ value: 'All', label: 'All' }, ...costModelFilterOpts.map(c => ({ value: c, label: c }))] },
+            { label: 'Department', value: filterDept,      setter: setFilterDept,      options: [{ value: 'All', label: 'All' }, ...deptFilterOpts] },
           ].map(f => (
             <label key={f.label} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontWeight: 500, color: '#515254' }}>{f.label}</span>
@@ -631,19 +684,22 @@ export default function TechnologyShowbackDashboard() {
               label: 'Showback — Consumption',
               sub: 'Cloud & usage-based costs shown back by actual consumption',
               color: CYAN,
-              rows: filtered.filter(r => (r.showbackType || '') === 'Consumption'),
+              rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('consumption')),
             },
             {
               label: 'Showback — Headcount',
               sub: 'Technology assets allocated proportional to headcount',
               color: NAVY,
-              rows: filtered.filter(r => (r.showbackType || '') === 'Headcount'),
+              rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('headcount')),
             },
             {
               label: 'Direct / No Showback',
               sub: 'Costs absorbed by Technology, not yet shown back',
               color: '#696F79',
-              rows: filtered.filter(r => !r.showbackType || r.showbackType === 'None'),
+              rows: filtered.filter(r => {
+                const st = (r.showbackType || '').toLowerCase();
+                return !r.showbackType || st === 'none' || st.includes('no showback');
+              }),
             },
           ];
           return (
@@ -710,7 +766,7 @@ export default function TechnologyShowbackDashboard() {
                             const isDimmed = hoveredSegment !== null && !isActive;
                             return (
                               <Cell key={i}
-                                fill={SHOWBACK_COLORS[entry.name] || DEPT_COLORS[i % DEPT_COLORS.length]}
+                                fill={getShowbackColor(entry.name) || DEPT_COLORS[i % DEPT_COLORS.length]}
                                 style={{
                                   opacity: isDimmed ? 0.2 : 1,
                                   filter: isActive ? 'brightness(1.08) drop-shadow(0 2px 8px rgba(0,0,0,0.28))' : 'none',
@@ -744,7 +800,7 @@ export default function TechnologyShowbackDashboard() {
                           <span style={{
                             width: 12, height: 12,
                             borderRadius: 2, flexShrink: 0,
-                            background: SHOWBACK_COLORS[entry.name] || DEPT_COLORS[i % DEPT_COLORS.length],
+                            background: getShowbackColor(entry.name) || DEPT_COLORS[i % DEPT_COLORS.length],
                             transform: isActive ? 'scale(1.25)' : 'scale(1)',
                             transition: 'transform 0.2s ease',
                           }} />
@@ -849,7 +905,7 @@ export default function TechnologyShowbackDashboard() {
                 const stRows = filtered.filter(r => (r.showbackType || 'None') === st);
                 const total  = stRows.reduce((s, r) => s + (r[period] || 0), 0);
                 return (
-                  <div key={st} style={card({ padding: 20, borderLeft: `4px solid ${SHOWBACK_COLORS[st] || '#999'}` })}>
+                  <div key={st} style={card({ padding: 20, borderLeft: `4px solid ${getShowbackColor(st)}` })}>
                     <div style={{ fontSize: 12, color: '#515254', fontWeight: 500 }}>{st || 'None'}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, margin: '4px 0' }}>{cad(total)}</div>
                     <div style={{ fontSize: 12, color: '#696F78' }}>{stRows.length} line items · {pct(total, totalPeriod)}</div>
@@ -868,7 +924,7 @@ export default function TechnologyShowbackDashboard() {
                   <Tooltip formatter={(v) => cad(v)} contentStyle={TT} />
                   <Legend />
                   {showbackTypes.map((st, i) => (
-                    <Bar key={st} dataKey={st} stackId="a" fill={SHOWBACK_COLORS[st] || DEPT_COLORS[i % DEPT_COLORS.length]} stroke="white" strokeWidth={1} />
+                    <Bar key={st} dataKey={st} stackId="a" fill={getShowbackColor(st) || DEPT_COLORS[i % DEPT_COLORS.length]} stroke="white" strokeWidth={1} />
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -911,7 +967,7 @@ export default function TechnologyShowbackDashboard() {
                         <td style={{ padding: '8px 12px', color: '#515254' }}>{r.glCategory}</td>
                         <td style={{ padding: '8px 12px' }}>
                           {r.showbackType && (
-                            <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 500 }}>{r.showbackType}</span>
+                            <span style={{ background: getShowbackColor(r.showbackType), color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 500 }}>{r.showbackType}</span>
                           )}
                         </td>
                         <td style={{ padding: '8px 12px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#515254', fontSize: 11 }} title={r.currentCostModel}>{r.currentCostModel}</td>
@@ -1011,7 +1067,7 @@ export default function TechnologyShowbackDashboard() {
                           <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11 }}>{r.pid || '—'}</td>
                           <td style={{ padding: '8px 12px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
                           <td style={{ padding: '8px 12px' }}>
-                            <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 500 }}>{r.showbackType}</span>
+                            <span style={{ background: getShowbackColor(r.showbackType), color: 'white', borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 500 }}>{r.showbackType}</span>
                           </td>
                           <td style={{ padding: '8px 12px', fontSize: 11, color: '#515254', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.currentCostModel}>{r.currentCostModel}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: '#FF9800' }}>{cad(r.actuals)}</td>
@@ -1086,6 +1142,82 @@ export default function TechnologyShowbackDashboard() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* MY USER LISTING (branch managers only)                            */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'userlisting' && (
+          <div style={card({ overflow: 'hidden' })}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>My User Listing ({adminUserList.length} rows)</span>
+                <span style={{ fontSize: 12, color: '#696F78', marginLeft: 12 }}>Branches: {(user?.allowed_branches || []).join(', ') || 'All'}</span>
+              </div>
+              <button onClick={loadAdminUserList} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: NAVY, color: 'white' }}>
+                    {['Branch Name','Branch Code','PID','Description','CEO','Legal','Corp Ops','HR','Audit','CD&O','Finance','Tech','IO','IRR','PE','CM&CI','ISR',''].map((h, i) => (
+                      <th key={i} style={{ padding: '8px 10px', textAlign: i >= 4 && i <= 16 ? 'right' : 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminUserList.slice(0, 300).map((r, i) => {
+                    const isEditing = editingUlId === r.id;
+                    const ulFields = ['ceo','legal','corpOps','hr','audit','cdo','finance','technology','io','irr','pe','cmci','isr'];
+                    return (
+                      <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{r.branchName}</td>
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.branchCode}</td>
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: 10 }}>{r.pid}</td>
+                        <td style={{ padding: '6px 10px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
+                        {ulFields.map(f => (
+                          <td key={f} style={{ padding: '6px 10px', textAlign: 'right' }}>
+                            {isEditing
+                              ? <input type="number" step="1" min="0"
+                                  value={editingUlData[f] ?? r[f] ?? 0}
+                                  onChange={e => setEditingUlData(d => ({...d, [f]: parseFloat(e.target.value) || 0}))}
+                                  style={{ width: 50, border: '1px solid #D0D0D0', borderRadius: 3, padding: '2px 4px', fontSize: 10, textAlign: 'right' }} />
+                              : (r[f] || 0)}
+                          </td>
+                        ))}
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                          {isEditing ? (
+                            <>
+                              <button onClick={async () => {
+                                await fetch(`${API_URL}/admin/user-listing/${r.id}`, {
+                                  method: 'PUT', credentials: 'include',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify(editingUlData),
+                                });
+                                setEditingUlId(null); setEditingUlData({});
+                                loadAdminUserList();
+                              }} style={{ background: NAVY, color: 'white', border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 10, marginRight: 4 }}>Save</button>
+                              <button onClick={() => { setEditingUlId(null); setEditingUlData({}); }} style={{ background: 'none', border: '1px solid #D0D0D0', color: '#515254', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 10 }}>✕</button>
+                            </>
+                          ) : (
+                            <button onClick={() => { setEditingUlId(r.id); setEditingUlData({...r}); }} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 10 }}>Edit</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {adminUserList.length === 0 && (
+                    <tr><td colSpan={18} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data loaded yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {adminUserList.length > 300 && (
+              <div style={{ padding: '10px 20px', fontSize: 12, color: '#696F78', borderTop: '1px solid #EEE' }}>
+                Showing first 300 of {adminUserList.length} rows.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* ADMIN                                                              */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {activeTab === 'admin' && (
@@ -1114,6 +1246,17 @@ export default function TechnologyShowbackDashboard() {
 
             {/* Recalculate button */}
             <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                <label style={{ fontSize: 13, color: '#515254', whiteSpace: 'nowrap' }}>Headcount year:</label>
+                <select value={recalcHcYear} onChange={e => setRecalcHcYear(e.target.value)}
+                  style={{ border: '1px solid #D0D0D0', borderRadius: 4, padding: '5px 10px', fontSize: 13, flex: 1 }}>
+                  {['fy2026','fy2027','fy2028'].map((yr, idx) => (
+                    <option key={yr} value={yr}>
+                      FY{baseYear + idx} — {hcYearTypes[yr] || 'Actual'}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 onClick={async () => {
                   setRecalcing(true);
@@ -1122,7 +1265,7 @@ export default function TechnologyShowbackDashboard() {
                     const res = await fetch(`${API_URL}/api/recalculate`, {
                       method: 'POST', credentials: 'include',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ period }),
+                      body: JSON.stringify({ period, headcountYear: recalcHcYear }),
                     });
                     if (res.ok) {
                       const d = await res.json();
@@ -1194,6 +1337,12 @@ export default function TechnologyShowbackDashboard() {
                               background: u.is_admin ? NAVY : '#E8F4F8', color: u.is_admin ? 'white' : NAVY,
                               borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600,
                             }}>{u.is_admin ? 'Admin' : 'Viewer'}</span>
+                            {u.can_edit_user_listing && !u.is_admin && (
+                              <span style={{
+                                background: '#E8F4E8', color: '#2E7D32',
+                                borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 600, marginLeft: 4,
+                              }}>UL Editor</span>
+                            )}
                           </td>
                           <td style={{ padding: '8px 12px', fontSize: 11, color: '#515254', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(u.allowed_gl_codes || []).join(', ')}>
                             {(u.allowed_gl_codes || []).length === 0 ? <span style={{ color: '#BBB' }}>All</span> : (u.allowed_gl_codes || []).join(', ')}
@@ -1251,9 +1400,15 @@ export default function TechnologyShowbackDashboard() {
                       />
                     </label>
                   ))}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <input type="checkbox" checked={userFormAdmin} onChange={e => setUserFormAdmin(e.target.checked)} />
                     <span style={{ fontSize: 13, color: '#515254' }}>Admin (can upload data &amp; manage users)</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <input type="checkbox" checked={userFormCanEditUL} onChange={e => setUserFormCanEditUL(e.target.checked)} disabled={userFormAdmin} />
+                    <span style={{ fontSize: 13, color: userFormAdmin ? '#BFBFBF' : '#515254' }}>
+                      Can edit User Listing (for their branches)
+                    </span>
                   </label>
                   {adminMsg && (
                     <div style={{
@@ -1349,7 +1504,10 @@ export default function TechnologyShowbackDashboard() {
                         const existingVals = adminCostModel.flatMap(r => [r.currentCostModel, r.futureCostModel]).filter(Boolean);
                         const CM_OPTS = [...new Set([...BASE_CM_OPTS, ...existingVals])].sort();
                         const CAT_OPTS = [...new Set(adminCostModel.map(r => r.costModelCategory).filter(Boolean))].sort();
-                        const ALLOC_OPTS = ['All','CEO','Legal','HR','Audit','CD&O','Corp Ops','Finance','Technology','IO','IRR','ISR','CM&CI','PE'];
+                        const SB_OPTS  = [...new Set(adminCostModel.map(r => r.showbackType).filter(Boolean))].sort();
+                        const ALLOC_OPTS = adminHeadcount.length > 0
+                          ? ['All', ...adminHeadcount.map(r => r.shortCode).filter(Boolean).sort()]
+                          : ['All','CEO','Legal','HR','Audit','CD&O','Corp Ops','Finance','Technology','IO','IRR','ISR','CM&CI','PE'];
                         return adminCostModel.slice(0, 200).map((r, i) => {
                         const isEditing = editingCmId === r.id;
                         const inp = (field, width) => (
@@ -1501,9 +1659,9 @@ export default function TechnologyShowbackDashboard() {
                             </td>
                             <td style={{ padding: '6px 10px' }}>
                               {isEditing
-                                ? sel('showbackType', ['', 'None', 'Headcount', 'Consumption', 'Chargeback'])
+                                ? combo('showbackType', SB_OPTS, 160)
                                 : r.showbackType
-                                  ? <span style={{ background: SHOWBACK_COLORS[r.showbackType] || '#999', color: 'white', borderRadius: 3, padding: '2px 7px', fontSize: 11 }}>{r.showbackType}</span>
+                                  ? <span style={{ background: getShowbackColor(r.showbackType), color: 'white', borderRadius: 3, padding: '2px 7px', fontSize: 11 }}>{r.showbackType}</span>
                                   : null}
                             </td>
                             <td style={{ padding: '6px 10px' }}>
@@ -1549,49 +1707,188 @@ export default function TechnologyShowbackDashboard() {
 
             {/* ── Headcount sub-tab ─────────────────────────────────────── */}
             {adminTab === 'headcount' && (
-              <div style={card({ overflow: 'hidden', maxWidth: 480 })}>
+              <div style={card({ overflow: 'hidden' })}>
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Headcount FY2026</span>
-                  <button onClick={loadAdminHeadcount} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Headcount ({adminHeadcount.length} departments)</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setNewHcRow({ deptCode:'', shortCode:'', deptName:'', fy2026:0, fy2027:0, fy2028:0 }); setEditingHcId(null); }}
+                      style={{ background: NAVY, color: 'white', border: 'none', borderRadius: 4, padding: '4px 14px', cursor: 'pointer', fontSize: 12 }}>+ Add Department</button>
+                    <button onClick={loadAdminHeadcount} style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                  </div>
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: NAVY, color: 'white' }}>
-                      {['Dept Code', 'Department', 'Headcount FY2026'].map((h, i) => (
-                        <th key={i} style={{ padding: '9px 16px', textAlign: i === 2 ? 'right' : 'left', fontWeight: 600 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminHeadcount.map((r, i) => (
-                      <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
-                        <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 12 }}>{r.shortCode}</td>
-                        <td style={{ padding: '8px 16px' }}>{r.deptName}</td>
-                        <td style={{ padding: '8px 16px', textAlign: 'right' }}>
-                          <input
-                            type="number" step="1" min="0"
-                            defaultValue={r.fy2026}
-                            onBlur={async (e) => {
-                              const val = parseFloat(e.target.value);
-                              if (!isNaN(val) && val !== r.fy2026) {
-                                await fetch(`${API_URL}/admin/headcount/${r.id}`, {
-                                  method: 'PUT', credentials: 'include',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ fy2026: val }),
-                                });
-                                loadAdminHeadcount();
-                              }
-                            }}
-                            style={{ width: 90, border: '1px solid #D0D0D0', borderRadius: 4, padding: '4px 8px', fontSize: 13, textAlign: 'right' }}
-                          />
-                        </td>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: NAVY, color: 'white' }}>
+                        <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Dept Code</th>
+                        <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600 }}>Short Code</th>
+                        <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600 }}>Department</th>
+                        {['fy2026','fy2027','fy2028'].map((yr, idx) => {
+                          const displayYear = baseYear + idx;
+                          return (
+                          <th key={yr} style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 600, minWidth: 140 }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 12 }}>FY</span>
+                              {idx === 0 ? (
+                                <input
+                                  type="number"
+                                  value={baseYear}
+                                  onChange={e => {
+                                    const y = parseInt(e.target.value);
+                                    if (!isNaN(y) && y > 2000 && y < 2100) {
+                                      setBaseYear(y);
+                                      localStorage.setItem('hcBaseYear', y);
+                                    }
+                                  }}
+                                  style={{ width: 56, background: 'transparent', color: 'white',
+                                    border: '1px solid rgba(255,255,255,0.4)', borderRadius: 3,
+                                    padding: '2px 4px', fontSize: 13, textAlign: 'center' }}
+                                />
+                              ) : (
+                                <span style={{ fontSize: 13 }}>{displayYear}</span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                              <select
+                                value={hcYearTypes[yr] || 'Actual'}
+                                onChange={e => {
+                                  const next = {...hcYearTypes, [yr]: e.target.value};
+                                  setHcYearTypes(next);
+                                  localStorage.setItem('hcYearTypes', JSON.stringify(next));
+                                }}
+                                style={{ fontSize: 11, border: '1px solid rgba(255,255,255,0.35)',
+                                  borderRadius: 3, background: 'rgba(255,255,255,0.15)', color: 'white',
+                                  padding: '2px 4px', cursor: 'pointer' }}
+                              >
+                                {['Actual','Forecast','Budget'].map(t => (
+                                  <option key={t} value={t} style={{ color: '#000', background: 'white' }}>{t}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </th>
+                          );
+                        })}
+                        <th style={{ padding: '9px 14px' }}></th>
                       </tr>
-                    ))}
-                    {adminHeadcount.length === 0 && (
-                      <tr><td colSpan={3} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {adminHeadcount.map((r, i) => {
+                        const isEditing = editingHcId === r.id;
+                        const isDeleting = deletingHcId === r.id;
+                        const txtInp = (field, placeholder, w) => (
+                          <input value={editingHcData[field] ?? ''}
+                            onChange={e => setEditingHcData(d => ({...d, [field]: e.target.value}))}
+                            placeholder={placeholder}
+                            style={{ width: w, border: '1px solid #D0D0D0', borderRadius: 3, padding: '3px 6px', fontSize: 12 }} />
+                        );
+                        return (
+                          <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                            <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12 }}>
+                              {isEditing ? txtInp('deptCode', 'Code', 70) : r.deptCode}
+                            </td>
+                            <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12 }}>
+                              {isEditing ? txtInp('shortCode', 'Short code', 90) : r.shortCode}
+                            </td>
+                            <td style={{ padding: '8px 14px' }}>
+                              {isEditing ? txtInp('deptName', 'Department name', 170) : r.deptName}
+                            </td>
+                            {['fy2026','fy2027','fy2028'].map(yr => (
+                              <td key={yr} style={{ padding: '8px 14px', textAlign: 'right' }}>
+                                <input type="number" step="1" min="0"
+                                  defaultValue={r[yr] ?? 0}
+                                  key={`${r.id}-${yr}-${r[yr]}`}
+                                  onBlur={async (e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val) && val !== r[yr]) {
+                                      await fetch(`${API_URL}/admin/headcount/${r.id}`, {
+                                        method: 'PUT', credentials: 'include',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ [yr]: val }),
+                                      });
+                                      loadAdminHeadcount();
+                                    }
+                                  }}
+                                  style={{ width: 80, border: '1px solid #D0D0D0', borderRadius: 4, padding: '4px 8px', fontSize: 13, textAlign: 'right' }} />
+                              </td>
+                            ))}
+                            <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+                              {isEditing ? (
+                                <>
+                                  <button onClick={async () => {
+                                    await fetch(`${API_URL}/admin/headcount/${r.id}`, {
+                                      method: 'PUT', credentials: 'include',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(editingHcData),
+                                    });
+                                    setEditingHcId(null); setEditingHcData({});
+                                    loadAdminHeadcount();
+                                  }} style={{ background: NAVY, color: 'white', border: 'none', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11, marginRight: 4 }}>Save</button>
+                                  <button onClick={() => { setEditingHcId(null); setEditingHcData({}); }}
+                                    style={{ background: 'none', border: '1px solid #D0D0D0', color: '#515254', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+                                </>
+                              ) : isDeleting ? (
+                                <>
+                                  <span style={{ fontSize: 11, color: '#C62828', marginRight: 6 }}>Delete?</span>
+                                  <button onClick={async () => {
+                                    await fetch(`${API_URL}/admin/headcount/${r.id}`, { method: 'DELETE', credentials: 'include' });
+                                    setDeletingHcId(null); loadAdminHeadcount();
+                                  }} style={{ background: '#C62828', color: 'white', border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 11, marginRight: 4 }}>Yes</button>
+                                  <button onClick={() => setDeletingHcId(null)}
+                                    style={{ background: 'none', border: '1px solid #D0D0D0', color: '#515254', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>No</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => { setEditingHcId(r.id); setDeletingHcId(null); setEditingHcData({ deptCode: r.deptCode, shortCode: r.shortCode, deptName: r.deptName }); }}
+                                    style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 11, marginRight: 4 }}>Edit</button>
+                                  <button onClick={() => { setDeletingHcId(r.id); setEditingHcId(null); }}
+                                    style={{ background: 'none', border: '1px solid #C62828', color: '#C62828', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>Delete</button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {newHcRow && (
+                        <tr style={{ background: '#F0FFF4', borderBottom: '1px solid #C6F6D5' }}>
+                          <td style={{ padding: '8px 14px' }}>
+                            <input value={newHcRow.deptCode} onChange={e => setNewHcRow(r => ({...r, deptCode: e.target.value}))}
+                              placeholder="Code" style={{ width: 70, border: '1px solid #68D391', borderRadius: 3, padding: '3px 6px', fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: '8px 14px' }}>
+                            <input value={newHcRow.shortCode} onChange={e => setNewHcRow(r => ({...r, shortCode: e.target.value}))}
+                              placeholder="Short code" style={{ width: 90, border: '1px solid #68D391', borderRadius: 3, padding: '3px 6px', fontSize: 12 }} />
+                          </td>
+                          <td style={{ padding: '8px 14px' }}>
+                            <input value={newHcRow.deptName} onChange={e => setNewHcRow(r => ({...r, deptName: e.target.value}))}
+                              placeholder="Department name" style={{ width: 170, border: '1px solid #68D391', borderRadius: 3, padding: '3px 6px', fontSize: 12 }} />
+                          </td>
+                          {['fy2026','fy2027','fy2028'].map(yr => (
+                            <td key={yr} style={{ padding: '8px 14px', textAlign: 'right' }}>
+                              <input type="number" step="1" min="0" value={newHcRow[yr] ?? 0}
+                                onChange={e => setNewHcRow(r => ({...r, [yr]: parseFloat(e.target.value) || 0}))}
+                                style={{ width: 80, border: '1px solid #68D391', borderRadius: 4, padding: '4px 8px', fontSize: 13, textAlign: 'right' }} />
+                            </td>
+                          ))}
+                          <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+                            <button onClick={async () => {
+                              await fetch(`${API_URL}/admin/headcount`, {
+                                method: 'POST', credentials: 'include',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(newHcRow),
+                              });
+                              setNewHcRow(null); loadAdminHeadcount();
+                            }} style={{ background: NAVY, color: 'white', border: 'none', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11, marginRight: 4 }}>Add</button>
+                            <button onClick={() => setNewHcRow(null)}
+                              style={{ background: 'none', border: '1px solid #D0D0D0', color: '#515254', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 11 }}>Cancel</button>
+                          </td>
+                        </tr>
+                      )}
+                      {adminHeadcount.length === 0 && !newHcRow && (
+                        <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -1606,8 +1903,8 @@ export default function TechnologyShowbackDashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: NAVY, color: 'white' }}>
-                        {['PID','Description','CEO','Legal','Corp Ops','HR','Audit','CD&O','Finance','Tech','IO','IRR','PE','CM&CI','ISR',''].map((h, i) => (
-                          <th key={i} style={{ padding: '8px 10px', textAlign: i >= 2 && i <= 14 ? 'right' : 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                        {['Branch Name','Branch Code','PID','Description','CEO','Legal','Corp Ops','HR','Audit','CD&O','Finance','Tech','IO','IRR','PE','CM&CI','ISR',''].map((h, i) => (
+                          <th key={i} style={{ padding: '8px 10px', textAlign: i >= 4 && i <= 16 ? 'right' : 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1617,6 +1914,8 @@ export default function TechnologyShowbackDashboard() {
                         const ulFields = ['ceo','legal','corpOps','hr','audit','cdo','finance','technology','io','irr','pe','cmci','isr'];
                         return (
                           <tr key={r.id} style={{ background: i % 2 === 0 ? '#FAFAFA' : 'white', borderBottom: '1px solid #F0F0F0' }}>
+                            <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', fontSize: 11 }}>{r.branchName}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: 11 }}>{r.branchCode}</td>
                             <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: 10 }}>{r.pid}</td>
                             <td style={{ padding: '6px 10px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description}>{r.description}</td>
                             {ulFields.map(f => (
@@ -1651,7 +1950,7 @@ export default function TechnologyShowbackDashboard() {
                         );
                       })}
                       {adminUserList.length === 0 && (
-                        <tr><td colSpan={16} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
+                        <tr><td colSpan={18} style={{ padding: 24, textAlign: 'center', color: '#BFBFBF', fontSize: 13 }}>No data — upload a workbook first</td></tr>
                       )}
                     </tbody>
                   </table>

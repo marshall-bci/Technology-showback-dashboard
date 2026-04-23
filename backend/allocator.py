@@ -105,9 +105,11 @@ def build_cost_model_index(db) -> dict:
     return idx
 
 
-def build_headcount_index(db) -> dict:
+def build_headcount_index(db, year: str = 'fy2026') -> dict:
     from database import HeadcountEntry
-    return {e.short_code: e.fy2026 for e in db.query(HeadcountEntry).all() if e.short_code}
+    attr = year if year in ('fy2026', 'fy2027', 'fy2028') else 'fy2026'
+    return {e.short_code: getattr(e, attr, 0.0) or 0.0
+            for e in db.query(HeadcountEntry).all() if e.short_code}
 
 
 def build_user_listing_index(db) -> dict:
@@ -325,15 +327,16 @@ def compute_allocation(row: dict, cm_index: dict, hc_index: dict,
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 
-def run_allocation(db, period: str = 'actuals') -> list[dict]:
+def run_allocation(db, period: str = 'actuals', hc_year: str = 'fy2026') -> list[dict]:
     """
     Read OcRawRow + reference tables from DB, run allocation, return rows.
     period: 'actuals' | 'forecast1' | 'forecast2' | 'budget'
+    hc_year: 'fy2026' | 'fy2027' | 'fy2028'
     """
     from database import OcRawRow
 
     cm_index = build_cost_model_index(db)
-    hc_index = build_headcount_index(db)
+    hc_index = build_headcount_index(db, year=hc_year)
     ul_index = build_user_listing_index(db)
 
     results = []

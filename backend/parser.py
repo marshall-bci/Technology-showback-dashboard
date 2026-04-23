@@ -141,6 +141,7 @@ def _load_user_listing(ws, db):
             continue
         # Cols F-R (0-based indices 5-17): CEO,Legal,CorpOps,HR,Audit,CD&O,Finance,Tech,IO,IRR,PE,CM&CI,ISR
         db.add(UserListingEntry(
+            branch_name = branch_name,
             branch_code = branch_code,
             gl_code     = str(row[1] or '').strip(),
             pid         = pid,

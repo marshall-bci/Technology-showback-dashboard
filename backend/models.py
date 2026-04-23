@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     display_name: Optional[str] = None
     is_admin: bool = False
+    can_edit_user_listing: bool = False
     allowed_gl_codes: List[str] = []
     allowed_branches: List[str] = []
 
@@ -15,6 +16,7 @@ class UserUpdate(BaseModel):
     display_name: Optional[str] = None
     is_admin: Optional[bool] = None
     is_active: Optional[bool] = None
+    can_edit_user_listing: Optional[bool] = None
     allowed_gl_codes: Optional[List[str]] = None
     allowed_branches: Optional[List[str]] = None
 
@@ -25,6 +27,7 @@ class UserResponse(BaseModel):
     display_name: str
     is_admin: bool
     is_active: bool
+    can_edit_user_listing: bool
     allowed_gl_codes: List[str]
     allowed_branches: List[str]
     created_at: datetime

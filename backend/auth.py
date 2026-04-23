@@ -156,9 +156,10 @@ async def dev_login(email: str = "testadmin@bci.ca", db: Session = Depends(get_d
 @router.get("/me")
 async def me(current_user: User = Depends(get_current_user)):
     return {
-        "email":            current_user.email,
-        "name":             current_user.display_name,
-        "is_admin":         current_user.is_admin,
-        "allowed_gl_codes": current_user.allowed_gl_codes  or [],
-        "allowed_branches": current_user.allowed_branches or [],
+        "email":                  current_user.email,
+        "name":                   current_user.display_name,
+        "is_admin":               current_user.is_admin,
+        "can_edit_user_listing":  current_user.can_edit_user_listing,
+        "allowed_gl_codes":       current_user.allowed_gl_codes  or [],
+        "allowed_branches":       current_user.allowed_branches or [],
     }
