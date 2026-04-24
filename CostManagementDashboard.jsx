@@ -3,7 +3,7 @@
 // Finance updates data by running: python scripts/push_data.py "Cost Management.xlsm"
 // SSO: users authenticate via Azure AD. Admin manages user access via the Admin tab.
 //
-// API URL config: set window.COST_API_URL before loading, or defaults to localhost:8000.
+// API URL config: set window.COST_API_URL before loading, or uses relative URLs (same origin).
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -14,7 +14,7 @@ import {
 // ─── Config ───────────────────────────────────────────────────────────────────
 const API_URL = (typeof window !== 'undefined' && window.COST_API_URL)
   ? window.COST_API_URL
-  : 'http://localhost:8000';
+  : '';
 const POLL_MS = 30_000;
 
 // ─── BCI Brand ────────────────────────────────────────────────────────────────
@@ -163,6 +163,8 @@ export default function TechnologyShowbackDashboard() {
   const [adminLogs,       setAdminLogs]       = useState([]);
   const [adminCostModel,  setAdminCostModel]  = useState([]);
   const [adminHeadcount,  setAdminHeadcount]  = useState([]);
+  const [coverageTarget,  setCoverageTarget]  = useState(null);
+  const [coverageTargetInput, setCoverageTargetInput] = useState('');
   const [adminUserList,   setAdminUserList]   = useState([]);
   const [adminTab,        setAdminTab]        = useState('users');
   // Search + column filters for each table
@@ -290,6 +292,20 @@ export default function TechnologyShowbackDashboard() {
     setLoggingOut(true);
     window.location.href = `${API_URL}/auth/logout`;
   };
+
+  // ── Settings ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${API_URL}/admin/settings`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.coverage_target) {
+          const v = parseFloat(data.coverage_target);
+          if (!isNaN(v)) { setCoverageTarget(v); setCoverageTargetInput(String(v)); }
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   // ── Admin helpers ────────────────────────────────────────────────────────────
   const loadAdminUsers = useCallback(async () => {
@@ -494,6 +510,9 @@ export default function TechnologyShowbackDashboard() {
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
     .reduce((s, r) => s + _rowValue(r), 0);
   const cmdCoveragePct  = cmdCoverageBase > 0 ? Math.min(cmdShownBack / cmdCoverageBase * 100, 100) : 0;
+  const fy27Base        = filtered.reduce((s, r) => s + (r.forecast1 || 0), 0);
+  const fy27ShownBack   = filtered.filter(r => _isShowbackRow(r)).reduce((s, r) => s + (r.forecast1 || 0), 0);
+  const fy27CoveragePct = fy27Base > 0 ? Math.min(fy27ShownBack / fy27Base * 100, 100) : 0;
   const cmdVariance            = totalBudget - totalPeriod;
   const showNotShownBackPanel  = !(user?.allowed_departments?.length) || user.allowed_departments.includes('Technology');
   const cmdTotalFlags     = rows.filter(r => r.comments).length;
@@ -961,18 +980,20 @@ export default function TechnologyShowbackDashboard() {
                       is actively shown back or charged to LOBs.</>
                     )}
                   </div>
-                  {!_deptRestrictedKeys && (
-                    <div style={{
-                      display: 'inline-block', marginTop: 10,
-                      fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 4,
-                      background: cmdCoveragePct >= 70 ? '#E8F5E9' : cmdCoveragePct >= 55 ? '#FFF8E1' : '#FFEBEE',
-                      color:      cmdCoveragePct >= 70 ? '#2E7D32' : cmdCoveragePct >= 55 ? '#E65100' : '#C62828',
-                    }}>
-                      {cmdCoveragePct >= 70 ? '▲ On track for 85% FY2027 target'
-                       : cmdCoveragePct >= 55 ? '→ Progressing — monitor closely'
-                       : '▼ Below target pace'}
-                    </div>
-                  )}
+                  {!_deptRestrictedKeys && (() => {
+                    const pct = fy27Base > 0 ? fy27CoveragePct : cmdCoveragePct;
+                    const yr  = fy27Base > 0 ? baseYear + 1 : baseYear;
+                    return (
+                      <div style={{
+                        display: 'inline-block', marginTop: 10,
+                        fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 4,
+                        background: pct >= 70 ? '#E8F5E9' : pct >= 50 ? '#FFF8E1' : '#FFEBEE',
+                        color:      pct >= 70 ? '#2E7D32' : pct >= 50 ? '#E65100' : '#C62828',
+                      }}>
+                        {`FY${yr} — ${pct.toFixed(1)}% shown back`}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1930,6 +1951,43 @@ export default function TechnologyShowbackDashboard() {
                   color:      recalcStatus.startsWith('Error') ? '#C62828' : '#2E7D32',
                 }}>{recalcStatus}</div>
               )}
+            </div>
+
+            {/* Showback coverage target */}
+            <div style={{ marginBottom: 20, padding: '16px', background: '#F8F9FA', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Showback Coverage Target</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="number" min="1" max="100" step="1"
+                  value={coverageTargetInput}
+                  onChange={e => setCoverageTargetInput(e.target.value)}
+                  placeholder="e.g. 85"
+                  style={{ border: '1px solid #D0D0D0', borderRadius: 4, padding: '6px 10px', fontSize: 13, width: 90 }}
+                />
+                <span style={{ fontSize: 13, color: '#696F79' }}>%</span>
+                <button
+                  onClick={async () => {
+                    const v = parseFloat(coverageTargetInput);
+                    if (isNaN(v) || v < 1 || v > 100) return;
+                    const res = await fetch(`${API_URL}/admin/settings`, {
+                      method: 'PUT', credentials: 'include',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ coverage_target: v }),
+                    });
+                    if (res.ok) setCoverageTarget(v);
+                  }}
+                  style={{
+                    background: NAVY, color: 'white', border: 'none', borderRadius: 6,
+                    padding: '6px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  }}
+                >Save</button>
+                {coverageTarget !== null && (
+                  <span style={{ fontSize: 12, color: '#696F79' }}>Current: {coverageTarget}%</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: '#A0A8B4', marginTop: 6 }}>
+                Shown as a badge on the Showback Coverage card in the Overview tab.
+              </div>
             </div>
 
             {/* Sub-tabs */}

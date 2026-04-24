@@ -20,8 +20,26 @@ CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", "")
 REDIRECT_URI  = os.getenv("AZURE_REDIRECT_URI",  "http://localhost:8000/auth/callback")
 FRONTEND_URL  = os.getenv("FRONTEND_URL",         "http://localhost:5173")
 
-TRUST_ZSCALER  = os.getenv("TRUST_ZSCALER_HEADERS", "false").lower() == "true"
-ZSCALER_HEADER = os.getenv("ZSCALER_USER_HEADER",   "X-Zscaler-Auth-User")
+TRUST_ZSCALER = os.getenv("TRUST_ZSCALER_HEADERS", "false").lower() == "true"
+
+# Known ZPA identity headers in priority order — used when ZSCALER_USER_HEADER=auto
+_ZPA_HEADERS = [
+    "X-Zscaler-Auth-User",
+    "X-Forwarded-User",
+    "X-User-Email",
+    "X-Auth-Request-Email",
+    "X-Remote-User",
+]
+
+def _get_zscaler_email(request: Request) -> str:
+    """Return the ZPA identity email from the first matching header, or ''."""
+    explicit = os.getenv("ZSCALER_USER_HEADER", "auto").strip()
+    headers_to_try = [explicit] if explicit.lower() != "auto" else _ZPA_HEADERS
+    for h in headers_to_try:
+        val = request.headers.get(h, "").strip().lower()
+        if "@" in val:
+            return val
+    return ""
 
 AUTHORITY     = f"https://login.microsoftonline.com/{TENANT_ID}"
 AUTHORIZE_URL = f"{AUTHORITY}/oauth2/v2.0/authorize"
@@ -83,7 +101,7 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 async def login(request: Request, db: Session = Depends(get_db)):
     # ZPA identity trust — skip OAuth if Zscaler already authenticated the user
     if TRUST_ZSCALER:
-        email = request.headers.get(ZSCALER_HEADER, "").lower().strip()
+        email = _get_zscaler_email(request)
         if email:
             user = db.query(User).filter(User.email == email, User.is_active == True).first()
             if not user:

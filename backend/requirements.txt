@@ -10,3 +10,5 @@ python-multipart==0.0.17
 pydantic[email]==2.10.1
 itsdangerous==2.2.0
 starlette==0.41.3
+azure-storage-blob==12.23.1
+psycopg2-binary==2.9.10

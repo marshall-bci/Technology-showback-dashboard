@@ -7,12 +7,13 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
 from auth import router as auth_router, get_current_user, require_admin
-from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry
+from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry, AppSetting
 from models import UserCreate, UserUpdate, UserResponse, LogEntry
 from permissions import filter_for_user
 from parser import parse_workbook
@@ -29,22 +30,22 @@ with engine.connect() as _c:
             _c.execute(_sql_text(f'ALTER TABLE headcount ADD COLUMN {_col} FLOAT DEFAULT 0.0'))
             _c.commit()
         except Exception:
-            pass
+            _c.rollback()
     try:
         _c.execute(_sql_text("ALTER TABLE user_listing ADD COLUMN branch_name TEXT DEFAULT ''"))
         _c.commit()
     except Exception:
-        pass
+        _c.rollback()
     try:
         _c.execute(_sql_text("ALTER TABLE users ADD COLUMN can_edit_user_listing BOOLEAN DEFAULT 0"))
         _c.commit()
     except Exception:
-        pass
+        _c.rollback()
     try:
         _c.execute(_sql_text("ALTER TABLE users ADD COLUMN allowed_departments JSON DEFAULT '[]'"))
         _c.commit()
     except Exception:
-        pass
+        _c.rollback()
 
 app = FastAPI(
     title="Technology Showback Dashboard API",
@@ -65,11 +66,34 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 # ── Cost data storage ─────────────────────────────────────────────────────────
 DATA_FILE = Path(__file__).parent / "data" / "cost_data.json"
 DATA_FILE.parent.mkdir(exist_ok=True)
+DIST_DIR  = Path(__file__).parent.parent / "dist"
+
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
+_AZ_CONN_STR    = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
+_AZ_CONTAINER   = os.getenv("AZURE_STORAGE_CONTAINER", "showback-data")
+_BLOB_NAME      = "cost_data.json"
+
+
+def _az_client():
+    from azure.storage.blob import BlobServiceClient
+    svc = BlobServiceClient.from_connection_string(_AZ_CONN_STR)
+    c = svc.get_container_client(_AZ_CONTAINER)
+    try:
+        c.create_container()
+    except Exception:
+        pass
+    return c
 
 
 def _load_data() -> dict:
+    empty = {"rows": [], "updatedAt": None, "sheetName": None}
+    if STORAGE_BACKEND == "azure":
+        try:
+            return json.loads(_az_client().download_blob(_BLOB_NAME).readall())
+        except Exception:
+            return empty
     if not DATA_FILE.exists():
-        return {"rows": [], "updatedAt": None, "sheetName": None}
+        return empty
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 
@@ -95,7 +119,10 @@ _migrate_cdo_split()
 
 def _save_data(rows: list, sheet_name: str):
     payload = {"rows": rows, "sheetName": sheet_name, "updatedAt": datetime.utcnow().isoformat()}
-    DATA_FILE.write_text(json.dumps(payload), encoding="utf-8")
+    if STORAGE_BACKEND == "azure":
+        _az_client().upload_blob(_BLOB_NAME, json.dumps(payload), overwrite=True)
+    else:
+        DATA_FILE.write_text(json.dumps(payload), encoding="utf-8")
     return payload
 
 
@@ -452,7 +479,41 @@ async def reset_all_data(request: Request, current_user: User = Depends(require_
     return {"ok": True}
 
 
+# ── Admin: app settings ───────────────────────────────────────────────────────
+@app.get("/admin/settings")
+async def get_settings(current_user: User = Depends(require_admin),
+                       db: Session = Depends(get_db)):
+    rows = db.query(AppSetting).all()
+    return {r.key: r.value for r in rows}
+
+
+@app.put("/admin/settings")
+async def update_settings(body: dict,
+                          current_user: User = Depends(require_admin),
+                          db: Session = Depends(get_db)):
+    for key, value in body.items():
+        setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+        if setting:
+            setting.value = str(value)
+        else:
+            db.add(AppSetting(key=key, value=str(value)))
+    db.commit()
+    return {"ok": True}
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
     return {"ok": True, "version": "1.0.0"}
+
+
+# ── Frontend static serving (must be last — catch-all would shadow API routes) ─
+if DIST_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="static-assets")
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    index = DIST_DIR / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse({"error": "frontend not built — run: npm run build"}, status_code=404)

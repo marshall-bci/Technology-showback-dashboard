@@ -104,6 +104,12 @@ class OcRawRow(Base):
     budget    = Column(Float, default=0.0)
 
 
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    key   = Column(String, primary_key=True)
+    value = Column(String, nullable=False)
+
+
 def get_db():
     db = SessionLocal()
     try:
