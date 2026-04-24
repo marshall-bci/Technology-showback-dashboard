@@ -100,10 +100,23 @@ def parse_oc_cell(cell_val: str) -> dict | None:
 def build_cost_model_index(db) -> dict:
     from database import CostModelEntry
     idx = {}
-    for e in db.query(CostModelEntry).all():
+    # Sort by id so higher-id (more recently updated) entries overwrite earlier ones.
+    # Also prefer entries where key fields are populated over earlier empty ones.
+    for e in db.query(CostModelEntry).order_by(CostModelEntry.id).all():
         key = f"{(e.branch_code or '').strip()}|{(e.gl_code or '').strip()}|{(e.pid or '').strip()}".lower()
-        if key not in idx:
+        existing = idx.get(key)
+        if not existing:
             idx[key] = e
+        else:
+            # Prefer entry with more fields populated (future_cost_model is the critical one)
+            existing_complete = bool((existing.future_cost_model or '').strip() and
+                                     (existing.current_cost_model or '').strip() and
+                                     (existing.showback_type or '').strip())
+            new_complete      = bool((e.future_cost_model or '').strip() and
+                                     (e.current_cost_model or '').strip() and
+                                     (e.showback_type or '').strip())
+            if new_complete and not existing_complete:
+                idx[key] = e
     return idx
 
 

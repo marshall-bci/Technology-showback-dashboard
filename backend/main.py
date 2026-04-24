@@ -238,6 +238,12 @@ async def update_cost_model(entry_id: int, body: dict,
         if js_key in body:
             setattr(entry, db_attr, body[js_key])
     db.commit()
+    # Re-run allocation so Cost Management tab reflects the updated Cost Model immediately.
+    from allocator import run_allocation
+    rows = run_allocation(db)
+    if rows:
+        existing = _load_data()
+        _save_data(rows, existing.get("sheetName", "OC Data Refresh"))
     return {"ok": True}
 
 
@@ -284,6 +290,11 @@ async def update_headcount(entry_id: int, body: dict,
             except (ValueError, TypeError):
                 raise HTTPException(400, f"{yr} must be a number")
     db.commit()
+    from allocator import run_allocation
+    rows = run_allocation(db)
+    if rows:
+        existing = _load_data()
+        _save_data(rows, existing.get("sheetName", "OC Data Refresh"))
     return {"ok": True}
 
 
@@ -349,6 +360,11 @@ async def update_user_listing(entry_id: int, body: dict,
             except (ValueError, TypeError):
                 pass
     db.commit()
+    from allocator import run_allocation
+    rows = run_allocation(db)
+    if rows:
+        existing = _load_data()
+        _save_data(rows, existing.get("sheetName", "OC Data Refresh"))
     return {"ok": True}
 
 
@@ -372,6 +388,45 @@ async def recalculate(request: Request, current_user: User = Depends(require_adm
     log_access(db, current_user.email, "recalculate", f"{len(rows)} rows",
                request.client.host if request.client else "")
     return {"ok": True, "rowCount": len(rows)}
+
+
+# ── Debug: show CM index entry for a given pid ────────────────────────────────
+@app.get("/api/debug/cm/{pid}")
+async def debug_cm(pid: str, current_user: User = Depends(require_admin),
+                   db: Session = Depends(get_db)):
+    from database import OcRawRow, CostModelEntry
+    from allocator import parse_oc_cell, build_cost_model_index
+
+    # Find OC raw rows that contain this pid
+    pid_upper = pid.upper()
+    oc_rows = db.query(OcRawRow).all()
+    matched_oc = []
+    for r in oc_rows:
+        parsed = parse_oc_cell(r.oc_cell)
+        if parsed and parsed.get('prod_id', '').upper() == pid_upper:
+            matched_oc.append({
+                'oc_cell': r.oc_cell,
+                'parsed': parsed,
+                'lookup_key': f"{parsed['level_code']}|{parsed['acct_num']}|{parsed['prod_id']}".lower(),
+            })
+
+    # Find CM entries with this pid (all of them)
+    cm_entries = db.query(CostModelEntry).filter(
+        CostModelEntry.pid.ilike(f'%{pid}%')
+    ).all()
+    cm_data = [{
+        'id': e.id,
+        'branch_name': e.branch_name,
+        'branch_code': e.branch_code,
+        'gl_code': e.gl_code,
+        'pid': e.pid,
+        'cm_key': f"{(e.branch_code or '').strip()}|{(e.gl_code or '').strip()}|{(e.pid or '').strip()}".lower(),
+        'future_cost_model': e.future_cost_model,
+        'current_cost_model': e.current_cost_model,
+        'showback_type': e.showback_type,
+    } for e in cm_entries]
+
+    return {"oc_matches": matched_oc, "cm_entries": cm_data}
 
 
 # ── Reset ─────────────────────────────────────────────────────────────────────
