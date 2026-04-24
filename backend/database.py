@@ -21,8 +21,9 @@ class User(Base):
     is_active              = Column(Boolean, default=True)
     can_edit_user_listing  = Column(Boolean, default=False)
     # Empty list = no access. Admins bypass this check entirely.
-    allowed_gl_codes  = Column(JSON, default=list)
-    allowed_branches  = Column(JSON, default=list)
+    allowed_gl_codes    = Column(JSON, default=list)
+    allowed_branches    = Column(JSON, default=list)
+    allowed_departments = Column(JSON, default=list)
     created_at    = Column(DateTime, default=datetime.utcnow)
     updated_at    = Column(DateTime, default=datetime.utcnow)
 

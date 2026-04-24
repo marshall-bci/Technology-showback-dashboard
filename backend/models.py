@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     can_edit_user_listing: bool = False
     allowed_gl_codes: List[str] = []
     allowed_branches: List[str] = []
+    allowed_departments: List[str] = []
 
 
 class UserUpdate(BaseModel):
@@ -19,6 +20,7 @@ class UserUpdate(BaseModel):
     can_edit_user_listing: Optional[bool] = None
     allowed_gl_codes: Optional[List[str]] = None
     allowed_branches: Optional[List[str]] = None
+    allowed_departments: Optional[List[str]] = None
 
 
 class UserResponse(BaseModel):
@@ -28,8 +30,9 @@ class UserResponse(BaseModel):
     is_admin: bool
     is_active: bool
     can_edit_user_listing: bool
-    allowed_gl_codes: List[str]
-    allowed_branches: List[str]
+    allowed_gl_codes: List[str] = []
+    allowed_branches: List[str] = []
+    allowed_departments: List[str] = []
     created_at: datetime
     updated_at: datetime
 

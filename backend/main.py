@@ -40,6 +40,11 @@ with engine.connect() as _c:
         _c.commit()
     except Exception:
         pass
+    try:
+        _c.execute(_sql_text("ALTER TABLE users ADD COLUMN allowed_departments JSON DEFAULT '[]'"))
+        _c.commit()
+    except Exception:
+        pass
 
 app = FastAPI(
     title="Technology Showback Dashboard API",
@@ -160,6 +165,7 @@ async def create_user(request: Request, user_in: UserCreate,
         can_edit_user_listing=user_in.can_edit_user_listing,
         allowed_gl_codes=user_in.allowed_gl_codes,
         allowed_branches=user_in.allowed_branches,
+        allowed_departments=user_in.allowed_departments,
     )
     db.add(user); db.commit(); db.refresh(user)
     log_access(db, current_user.email, "create_user", user.email,

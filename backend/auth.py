@@ -36,8 +36,9 @@ def create_jwt(user: User) -> str:
         "email":            user.email,
         "name":             user.display_name,
         "is_admin":         user.is_admin,
-        "allowed_gl_codes": user.allowed_gl_codes  or [],
-        "allowed_branches": user.allowed_branches or [],
+        "allowed_gl_codes":    user.allowed_gl_codes    or [],
+        "allowed_branches":    user.allowed_branches    or [],
+        "allowed_departments": user.allowed_departments or [],
         "exp":              datetime.utcnow() + timedelta(minutes=JWT_EXPIRE),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
@@ -149,11 +150,18 @@ async def callback(request: Request, db: Session = Depends(get_db)):
     return response
 
 
-@router.post("/logout")
-async def logout():
+def _logout_response():
     response = RedirectResponse(FRONTEND_URL, status_code=302)
-    response.delete_cookie("access_token")
+    response.delete_cookie("access_token", path="/")
     return response
+
+@router.get("/logout")
+async def logout_get():
+    return _logout_response()
+
+@router.post("/logout")
+async def logout_post():
+    return _logout_response()
 
 
 @router.get("/dev-login")
@@ -178,6 +186,7 @@ async def me(current_user: User = Depends(get_current_user)):
         "name":                   current_user.display_name,
         "is_admin":               current_user.is_admin,
         "can_edit_user_listing":  current_user.can_edit_user_listing,
-        "allowed_gl_codes":       current_user.allowed_gl_codes  or [],
-        "allowed_branches":       current_user.allowed_branches or [],
+        "allowed_gl_codes":       current_user.allowed_gl_codes    or [],
+        "allowed_branches":       current_user.allowed_branches    or [],
+        "allowed_departments":    current_user.allowed_departments or [],
     }

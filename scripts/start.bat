@@ -13,6 +13,9 @@ echo   BCI Technology Showback Dashboard
 echo  ============================================================
 echo.
 
+REM ── Kill any process already on port 8000 ────────────────────────────────
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8000 "') do taskkill /F /PID %%a >nul 2>&1
+
 REM ── Start FastAPI backend ─────────────────────────────────────────────────
 echo [1/2] Starting FastAPI backend (port 8000)...
 cd /d "%DASHBOARD_DIR%backend"
