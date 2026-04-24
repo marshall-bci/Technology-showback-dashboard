@@ -20,6 +20,9 @@ CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", "")
 REDIRECT_URI  = os.getenv("AZURE_REDIRECT_URI",  "http://localhost:8000/auth/callback")
 FRONTEND_URL  = os.getenv("FRONTEND_URL",         "http://localhost:5173")
 
+TRUST_ZSCALER  = os.getenv("TRUST_ZSCALER_HEADERS", "false").lower() == "true"
+ZSCALER_HEADER = os.getenv("ZSCALER_USER_HEADER",   "X-Zscaler-Auth-User")
+
 AUTHORITY     = f"https://login.microsoftonline.com/{TENANT_ID}"
 AUTHORIZE_URL = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_URL     = f"{AUTHORITY}/oauth2/v2.0/token"
@@ -76,7 +79,22 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
 @router.get("/login")
-async def login(request: Request):
+async def login(request: Request, db: Session = Depends(get_db)):
+    # ZPA identity trust — skip OAuth if Zscaler already authenticated the user
+    if TRUST_ZSCALER:
+        email = request.headers.get(ZSCALER_HEADER, "").lower().strip()
+        if email:
+            user = db.query(User).filter(User.email == email, User.is_active == True).first()
+            if not user:
+                return RedirectResponse(f"{FRONTEND_URL}?auth_error=not_authorised&email={email}")
+            token_str = create_jwt(user)
+            response = RedirectResponse(f"{FRONTEND_URL}?auth_success=1")
+            response.set_cookie("access_token", token_str, httponly=True, samesite="lax",
+                                max_age=JWT_EXPIRE * 60,
+                                secure=os.getenv("APP_ENV") == "production")
+            return response
+
+    # Fall back to Microsoft OAuth
     if not CLIENT_ID:
         raise HTTPException(500, "SSO not configured — set AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET in .env")
     state = secrets.token_urlsafe(32)
