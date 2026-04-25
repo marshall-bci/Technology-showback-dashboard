@@ -1295,13 +1295,6 @@ export default function TechnologyShowbackDashboard() {
             </div>
           </div>
 
-          {/* Attribution */}
-          <div style={{ textAlign: 'center', paddingTop: 24, paddingBottom: 8 }}>
-            <span style={{ fontSize: 11, color: '#C0C8D0', letterSpacing: 0.2 }}>
-              Concept, design &amp; development — <span style={{ fontWeight: 600 }}>Marshall Singh</span>, BCI Technology
-            </span>
-          </div>
-
           );
         })()}
 
@@ -2931,6 +2924,13 @@ export default function TechnologyShowbackDashboard() {
           </div>
         </div>
       )}
+
+      {/* Attribution */}
+      <div style={{ textAlign: 'center', padding: '20px 0 12px' }}>
+        <span style={{ fontSize: 11, color: '#B0BAC6', letterSpacing: 0.2 }}>
+          Concept, design &amp; development — <span style={{ fontWeight: 600 }}>Marshall Singh</span>, BCI Finance
+        </span>
+      </div>
 
     </div>
   );
