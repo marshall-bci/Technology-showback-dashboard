@@ -633,7 +633,7 @@ export default function TechnologyShowbackDashboard() {
             Sign in with BCI (Microsoft SSO)
           </a>
 
-          {API_URL.includes('localhost') && (
+          {window.location.hostname === 'localhost' && (
             <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #EEE' }}>
               <div style={{ fontSize: 11, color: '#BBB', marginBottom: 8, textAlign: 'center' }}>
                 Local dev — no Azure AD needed
