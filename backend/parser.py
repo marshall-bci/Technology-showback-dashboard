@@ -121,44 +121,93 @@ def _load_headcount(ws, db, spread_year: str):
 def _load_user_listing(ws, db):
     db.query(UserListingEntry).delete()
 
-    def _f(row, col_0):
-        if col_0 < len(row) and row[col_0] is not None:
-            try:
-                return float(row[col_0])
-            except (ValueError, TypeError):
-                return 0.0
-        return 0.0
+    def _f(row, idx):
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return 0.0
+        try:
+            return float(row[idx])
+        except (ValueError, TypeError):
+            return 0.0
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if not row or len(row) < 4:
+    # Normalised header → DB field name.  Handles any column order in the sheet.
+    HEADER_MAP = {
+        'branch name':  'branch_name',
+        'gl code':      'gl_code',
+        'branch code':  'branch_code',
+        'pid codes':    'pid',
+        'pid':          'pid',
+        'description':  'description',
+        'ceo':          'ceo',
+        'legal':        'legal',
+        'hr':           'hr',
+        'audit':        'audit',
+        "cd&o":         'cdo',
+        'cdo':          'cdo',
+        'corp ops':     'corp_ops',
+        'corpops':      'corp_ops',
+        'finance':      'finance',
+        'technology':   'technology',
+        'io':           'io',
+        'irr':          'irr',
+        'pe':           'pe',
+        'cm&ci':        'cmci',
+        'cmci':         'cmci',
+        'isr':          'isr',
+    }
+    DEPT_FIELDS = {'ceo', 'legal', 'corp_ops', 'hr', 'audit', 'cdo',
+                   'finance', 'technology', 'io', 'irr', 'pe', 'cmci', 'isr'}
+
+    all_rows = list(ws.iter_rows(min_row=1, values_only=True))
+    if not all_rows:
+        db.commit()
+        return
+
+    # Locate header row by scanning for a row that contains 'branch name' or 'pid'
+    col_map = {}
+    header_idx = 0
+    for i, row in enumerate(all_rows):
+        norm = {str(c or '').strip().lower(): j for j, c in enumerate(row) if c is not None}
+        if 'branch name' in norm or 'pid codes' in norm or 'pid' in norm:
+            for hdr, col_idx in norm.items():
+                db_field = HEADER_MAP.get(hdr)
+                if db_field:
+                    col_map[db_field] = col_idx
+            header_idx = i
+            break
+
+    for row in all_rows[header_idx + 1:]:
+        if not row:
             continue
-        branch_name = str(row[0] or '').strip()
+
+        bn_idx = col_map.get('branch_name', 0)
+        branch_name = str(row[bn_idx] if bn_idx < len(row) else (row[0] or '')).strip()
         if not branch_name:
             continue
-        branch_code = branch_name[:4] if len(branch_name) >= 4 else branch_name
-        pid = str(row[3] or '').strip()
+
+        pid_idx = col_map.get('pid', 3)
+        pid = str(row[pid_idx] if pid_idx < len(row) else '').strip()
         if not pid:
             continue
-        # Cols F-R (0-based indices 5-17): CEO,Legal,CorpOps,HR,Audit,CD&O,Finance,Tech,IO,IRR,PE,CM&CI,ISR
+
+        gl_idx = col_map.get('gl_code', 1)
+        gl_code = str(row[gl_idx] if gl_idx < len(row) else '').strip()
+
+        bc_idx = col_map.get('branch_code')
+        if bc_idx is not None and bc_idx < len(row) and row[bc_idx]:
+            branch_code = str(row[bc_idx]).strip()
+        else:
+            branch_code = branch_name[:4] if len(branch_name) >= 4 else branch_name
+
+        desc_idx = col_map.get('description')
+        description = str(row[desc_idx] if desc_idx is not None and desc_idx < len(row) and row[desc_idx] else '').strip()
+
         db.add(UserListingEntry(
             branch_name = branch_name,
             branch_code = branch_code,
-            gl_code     = str(row[1] or '').strip(),
+            gl_code     = gl_code,
             pid         = pid,
-            description = str(row[4] or '').strip() if len(row) > 4 else '',
-            ceo        = _f(row, 5),
-            legal      = _f(row, 6),
-            corp_ops   = _f(row, 7),
-            hr         = _f(row, 8),
-            audit      = _f(row, 9),
-            cdo        = _f(row, 10),
-            finance    = _f(row, 11),
-            technology = _f(row, 12),
-            io         = _f(row, 13),
-            irr        = _f(row, 14),
-            pe         = _f(row, 15),
-            cmci       = _f(row, 16),
-            isr        = _f(row, 17),
+            description = description,
+            **{field: _f(row, col_map.get(field)) for field in DEPT_FIELDS}
         ))
     db.commit()
 

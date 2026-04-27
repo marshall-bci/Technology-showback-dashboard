@@ -66,12 +66,14 @@ const SHOWBACK_COLORS = {
   'Chargeback':  '#DC642B',
 };
 const getShowbackColor = (st) => {
-  if (!st) return '#BFBFBF';
+  if (!st) return '#B0B8C4';
   const s = st.toLowerCase();
   if (s.includes('chargeback'))  return '#DC642B';
   if (s.includes('consumption')) return '#00ABBD';
   if (s.includes('headcount'))   return '#00365B';
-  return '#BFBFBF';
+  if (s.includes("technology's portion") || s.includes('direct allocation to technology')) return '#607D8B';
+  if (s.startsWith('no showback')) return '#9E9E9E';
+  return '#B0B8C4';
 };
 
 const PERIODS = [
@@ -176,6 +178,7 @@ export default function TechnologyShowbackDashboard() {
   const [hcColFilter,     setHcColFilter]     = useState({});
   const [cmtSearch,       setCmtSearch]       = useState('');
   const [cmtColFilter,    setCmtColFilter]    = useState({});
+  const [cmtPinnedCols,   setCmtPinnedCols]   = useState(new Set(['branch']));
   const [userFormEmail,   setUserFormEmail]   = useState('');
   const [userFormName,    setUserFormName]    = useState('');
   const [userFormAdmin,      setUserFormAdmin]      = useState(false);
@@ -456,6 +459,8 @@ export default function TechnologyShowbackDashboard() {
         const stl = st.toLowerCase();
         if (stl.startsWith('no showback')) return acc;
       }
+      // Exclude showback rows with no dept allocation yet (pending User Listing)
+      if ((st || '').toLowerCase().startsWith('showback') && DEPTS.every(d => (r[d.key] || 0) === 0)) return acc;
       acc[st] = (acc[st] || 0) + _rowValue(r);
       return acc;
     }, {})
@@ -478,7 +483,9 @@ export default function TechnologyShowbackDashboard() {
     name:   d.label,
     key:    d.key,
     value:  filtered
-      .filter(r => _isApproachRow(r) && (_deptRestrictedKeys ? !_isDirectCB(r) : true))
+      .filter(r => _isApproachRow(r)
+        && (_deptRestrictedKeys ? !_isDirectCB(r) : true)
+        && DEPTS.some(dk => (r[dk.key] || 0) !== 0))
       .reduce((s, r) => s + Math.max(r[d.key] || 0, 0), 0),
     color:  DEPT_COLORS[i],
     isTech: d.key === 'technology',
@@ -762,15 +769,17 @@ export default function TechnologyShowbackDashboard() {
               value:  cmdCoveragePct.toFixed(1) + '%',
               valueColor: '#69F0AE',
               pill:   `${cadShort(cmdShownBack)} of ${cadShort(cmdCoverageBase)} shown back`,
-              pillColor: 'rgba(255,255,255,.5)',
-              pillBg:    'rgba(255,255,255,.08)',
-              sub:    `${filtered.filter(r => (r.showbackType||'').toLowerCase().startsWith('showback') && _coverageDepts.some(d=>(r[d.key]||0)!==0)).length} of ${filtered.length} items${cmdPendingUserList > 0 ? ` · (${cadShort(cmdPendingUserList)} pending User Listing)` : ''}`,
+              pillColor: 'rgba(255,255,255,.85)',
+              pillBg:    'rgba(255,255,255,.1)',
+              sub:    `${filtered.filter(r => (r.showbackType||'').toLowerCase().startsWith('showback') && _coverageDepts.some(d=>(r[d.key]||0)!==0)).length} of ${filtered.length} items`,
+              pendingAmt:  cmdPendingUserList,
+              pendingRows: filtered.filter(r => _isShowbackRow(r) && (r.comments||'').includes('User Based Listing') && DEPTS.every(d => (r[d.key]||0) === 0)),
             },
             ...(showNotShownBackPanel ? [{
               label:     'Not Shown Back · Breakdown',
               breakdown: [
-                { label: 'No Showback',          amount: cmdNoShowback,     color: 'rgba(255,255,255,.55)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                { label: "Technology's Portion", amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.55)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
+                { label: 'No Showback',          amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+                { label: "Technology's Portion", amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
                 { label: 'Not Configured',       amount: cmdNotConfigured,  color: '#FFD54F',               note: 'Needs decision', section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
               ],
               pendingUBL: cmdPendingUserList,
@@ -780,7 +789,7 @@ export default function TechnologyShowbackDashboard() {
               padding: '14px 28px',
               borderRight: i < 2 ? '1px solid rgba(255,255,255,.08)' : 'none',
             }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.4)', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>
                 {c.label}
               </div>
               {c.breakdown ? (
@@ -788,12 +797,12 @@ export default function TechnologyShowbackDashboard() {
                   <div style={{ display: 'flex', gap: 16, marginBottom: 6 }}>
                     {c.breakdown.map((row, j) => (
                       <div key={j} style={{ flex: 1, borderRight: j < c.breakdown.length - 1 ? '1px solid rgba(255,255,255,.07)' : 'none', paddingRight: j < c.breakdown.length - 1 ? 16 : 0 }}>
-                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
                         <div
                           onClick={() => setHeroModal({ section: row.section, title: row.label, note: row.note, rows: row.rows, total: row.amount })}
                           style={{ fontSize: 20, fontWeight: 700, color: row.color, letterSpacing: '-0.5px', marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                         >{cadShort(row.amount)}</div>
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,255,255,.07)', color: row.color, whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,255,255,.1)', color: row.color, whiteSpace: 'nowrap' }}>
                           {row.note}
                         </span>
                       </div>
@@ -806,10 +815,16 @@ export default function TechnologyShowbackDashboard() {
                     {c.value}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>
                       {c.pill}
                     </span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,.4)' }}>{c.sub}</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>{c.sub}</span>
+                    {c.pendingAmt > 0 && (
+                      <span
+                        onClick={() => setHeroModal({ section: 'Showback Coverage', title: 'Pending User Listing', note: 'Pending data', rows: c.pendingRows, total: c.pendingAmt })}
+                        style={{ fontSize: 11, color: '#FFD54F', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2 }}
+                      >· ({cadShort(c.pendingAmt)} pending User Listing)</span>
+                    )}
                   </div>
                 </>
               )}
@@ -912,7 +927,7 @@ export default function TechnologyShowbackDashboard() {
               badge: 'Primary model',
               color: NAVY,
               meta: 'Shared across all 12 LOBs proportional to FY2026 headcount',
-              rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('headcount')),
+              rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('headcount') && DEPTS.some(d => (r[d.key] || 0) !== 0)),
             },
             {
               name: 'Consumption-Based Showback',
@@ -921,7 +936,7 @@ export default function TechnologyShowbackDashboard() {
               meta: 'Azure + on-prem metering · allocated by actual consumption',
               rows: filtered.filter(r => {
                 const st = (r.showbackType || '').toLowerCase();
-                return st.includes('consumption') && !st.includes('chargeback');
+                return st.includes('consumption') && !st.includes('chargeback') && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
             },
             {
@@ -931,7 +946,7 @@ export default function TechnologyShowbackDashboard() {
               meta: 'Consumption showback for 1 year, then transitions to direct chargeback',
               rows: filtered.filter(r => {
                 const st = (r.showbackType || '').toLowerCase();
-                return st.includes('consumption') && st.includes('chargeback');
+                return st.includes('consumption') && st.includes('chargeback') && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
             },
             ...(!_deptRestrictedKeys ? [{
@@ -942,7 +957,8 @@ export default function TechnologyShowbackDashboard() {
               rows: filtered.filter(r => {
                 const st = (r.showbackType || '').toLowerCase();
                 const cm = (r.currentCostModel || '').toLowerCase();
-                return st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount'));
+                return (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount')))
+                  && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
             }] : []),
           ];
@@ -971,7 +987,7 @@ export default function TechnologyShowbackDashboard() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
                     Showback Programme Coverage
                   </div>
-                  <div style={{ fontSize: 12, color: '#696F79', lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 13, color: '#696F79', lineHeight: 1.6 }}>
                     {(user?.allowed_departments?.length && !user.allowed_departments.includes('Technology')) ? (
                       <><strong style={{ color: NAVY }}>{cadShort(cmdShownBack)}</strong> is actively shown back or charged to {user.allowed_departments.join(', ')}.</>
                     ) : (
@@ -986,7 +1002,7 @@ export default function TechnologyShowbackDashboard() {
                     return (
                       <div style={{
                         display: 'inline-block', marginTop: 10,
-                        fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 4,
+                        fontSize: 13, fontWeight: 600, padding: '4px 10px', borderRadius: 4,
                         background: pct >= 70 ? '#E8F5E9' : pct >= 50 ? '#FFF8E1' : '#FFEBEE',
                         color:      pct >= 70 ? '#2E7D32' : pct >= 50 ? '#E65100' : '#C62828',
                       }}>
@@ -1000,7 +1016,7 @@ export default function TechnologyShowbackDashboard() {
               {/* Donut chart — hover elevates segment + dims rest; legend hover mirrors */}
               <div style={card({ padding: 22 })}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Cost by Showback Type</div>
-                <div style={{ fontSize: 11, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
+                <div style={{ fontSize: 13, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                   <div style={{ flexShrink: 0, width: 168, height: 168 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -1040,7 +1056,7 @@ export default function TechnologyShowbackDashboard() {
                     </ResponsiveContainer>
                   </div>
                   {/* BCI-style legend — hover here also focuses the donut */}
-                  <div style={{ flex: 1, fontSize: 11 }}>
+                  <div style={{ flex: 1, fontSize: 13 }}>
                     {showbackPieData.map((entry, i) => {
                       const isActive = hoveredSegment === entry.name;
                       const isDimmed = hoveredSegment !== null && !isActive;
@@ -1077,7 +1093,7 @@ export default function TechnologyShowbackDashboard() {
             {/* Approach Breakdown — CTO mock style */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Showback Programme — Approach Breakdown</div>
-              <div style={{ fontSize: 11, color: '#696F79', marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: '#696F79', marginTop: 2 }}>
                 How the {cadShort(cmdShownBack)} shown back is distributed across the four active allocation methods
               </div>
             </div>
@@ -1089,9 +1105,9 @@ export default function TechnologyShowbackDashboard() {
                 return (
                   <div key={i} style={card({ padding: '18px 20px' })}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, paddingRight: 8 }}>{ap.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, paddingRight: 8 }}>{ap.name}</div>
                       <div style={{
-                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, flexShrink: 0,
+                        fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, flexShrink: 0,
                         background: `${ap.color}1A`, color: ap.color,
                       }}>{ap.badge}</div>
                     </div>
@@ -1101,13 +1117,13 @@ export default function TechnologyShowbackDashboard() {
                     >
                       {cadShort(apTotal)}
                     </div>
-                    <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>
                       {apPct.toFixed(1)}% of total · {ap.rows.length} line items
                     </div>
                     <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
                       <div style={{ height: '100%', borderRadius: 3, background: ap.color, width: `${apPct}%` }} />
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#696F79' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#696F79' }}>
                       <span style={{ flex: 1 }}>{ap.meta}</span>
                       <span style={{ fontWeight: 700, color: ap.color, flexShrink: 0, paddingLeft: 6 }}>{apPct.toFixed(1)}%</span>
                     </div>
@@ -1155,7 +1171,7 @@ export default function TechnologyShowbackDashboard() {
                   rowAmt: _deptRowAmt || undefined,
                   subLine: `${_deptTotal > 0 ? (belowThresholdTotal / _deptTotal * 100).toFixed(1) : '—'}% of total · ${belowThresholdRows.length} line items`,
                   barPct: _deptTotal > 0 ? belowThresholdTotal / _deptTotal * 100 : 0,
-                  meta: 'Per Slide 8 Action 3 — items shown back below threshold',
+                  meta: 'Items shown back below threshold',
                   pctLabel: `${_deptTotal > 0 ? (belowThresholdTotal / _deptTotal * 100).toFixed(1) : '—'}%`,
                 },
               ];
@@ -1164,18 +1180,18 @@ export default function TechnologyShowbackDashboard() {
                   {kpiCards.map((k, i) => (
                     <div key={i} style={card({ padding: '18px 20px' })}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, paddingRight: 8 }}>{k.name}</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, flexShrink: 0, background: `${k.color}1A`, color: k.color }}>{k.badge}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, paddingRight: 8 }}>{k.name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, flexShrink: 0, background: `${k.color}1A`, color: k.color }}>{k.badge}</div>
                       </div>
                       <div
                         onClick={() => setHeroModal({ section: 'Cost Summary', title: k.name, note: k.badge, rows: k.rows, total: k.rawTotal, rowAmt: k.rowAmt })}
                         style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                       >{k.amount}</div>
-                      <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>{k.subLine}</div>
+                      <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>{k.subLine}</div>
                       <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
                         <div style={{ height: '100%', borderRadius: 3, background: k.color, width: `${k.barPct}%` }} />
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#696F79' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#696F79' }}>
                         <span style={{ flex: 1 }}>{k.meta}</span>
                         <span style={{ fontWeight: 700, color: k.color, flexShrink: 0, paddingLeft: 6 }}>{k.pctLabel}</span>
                       </div>
@@ -1191,7 +1207,7 @@ export default function TechnologyShowbackDashboard() {
               {/* Custom bar list — matches viewer mock */}
               <div style={card({ padding: '22px 24px' })}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>How Departments Compare</div>
-                <div style={{ fontSize: 11, color: '#696F79', marginBottom: 18 }}>
+                <div style={{ fontSize: 13, color: '#696F79', marginBottom: 18 }}>
                   Allocated technology cost by department for {periodLabel} — includes headcount showback, consumption showback, and chargeback
                 </div>
                 {(() => {
@@ -1214,21 +1230,21 @@ export default function TechnologyShowbackDashboard() {
                           cursor: 'pointer',
                         }}
                       >
-                        <div style={{ width: 18, fontSize: 10, color: '#BFBFBF', textAlign: 'right', flexShrink: 0 }}>{rank}</div>
-                        <div style={{ width: 124, fontSize: 12, fontWeight: isSel ? 700 : 400, fontStyle: d.isTech ? 'italic' : 'normal', color: isSel ? CYAN : d.isTech ? '#696F79' : NAVY, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ width: 18, fontSize: 12, color: '#BFBFBF', textAlign: 'right', flexShrink: 0 }}>{rank}</div>
+                        <div style={{ width: 124, fontSize: 13, fontWeight: isSel ? 700 : 400, fontStyle: d.isTech ? 'italic' : 'normal', color: isSel ? CYAN : d.isTech ? '#696F79' : NAVY, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {d.name}
                         </div>
                         <div style={{ flex: 1, height: 10, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${barPct}%`, background: barColor, borderRadius: 3, transition: 'background 0.15s' }} />
                         </div>
-                        <div style={{ width: 54, textAlign: 'right', fontSize: 12, fontWeight: 700, color: isSel ? CYAN : NAVY, flexShrink: 0 }}>{cadShort(d.value)}</div>
-                        <div style={{ width: 36, textAlign: 'right', fontSize: 11, color: '#696F79', flexShrink: 0 }}>{pct(d.value, totalPeriod)}</div>
+                        <div style={{ width: 54, textAlign: 'right', fontSize: 13, fontWeight: 700, color: isSel ? CYAN : NAVY, flexShrink: 0 }}>{cadShort(d.value)}</div>
+                        <div style={{ width: 36, textAlign: 'right', fontSize: 13, color: '#696F79', flexShrink: 0 }}>{pct(d.value, totalPeriod)}</div>
                       </div>
                     );
                   });
                 })()}
                 {!_deptRestrictedKeys && (
-                  <div style={{ marginTop: 14, fontSize: 11, color: '#BFBFBF' }}>
+                  <div style={{ marginTop: 14, fontSize: 13, color: '#BFBFBF' }}>
                     Technology's absorbed cost ({cadShort(deptTotals.find(d => d.isTech)?.value || 0)}) is not charged to any department
                   </div>
                 )}
@@ -1238,11 +1254,11 @@ export default function TechnologyShowbackDashboard() {
               {selectedDept && selDeptInfo && (
                 <div style={card({ padding: '22px 24px', borderTop: `3px solid ${CYAN}` })}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{selDeptInfo.label} Department</div>
-                  <div style={{ fontSize: 11, color: '#696F79', marginBottom: 16 }}>Your allocated share for {periodLabel}</div>
+                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 16 }}>Your allocated share for {periodLabel}</div>
                   <div style={{ fontSize: 32, fontWeight: 700, color: CYAN, letterSpacing: -1, marginBottom: 4 }}>{cadShort(selDeptTotal)}</div>
-                  <div style={{ fontSize: 12, color: '#696F79', marginBottom: 20 }}>{pct(selDeptTotal, totalPeriod)} of total Technology spend</div>
+                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 20 }}>{pct(selDeptTotal, totalPeriod)} of total Technology spend</div>
 
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#BFBFBF', marginBottom: 12 }}>Breakdown by Method</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#BFBFBF', marginBottom: 12 }}>Breakdown by Method</div>
                   {[
                     { label: 'Headcount showback',       amount: selHcTotal,    color: NAVY },
                     { label: 'Consumption showback',     amount: selConTotal,   color: CYAN },
@@ -1250,7 +1266,7 @@ export default function TechnologyShowbackDashboard() {
                     { label: 'Direct chargeback',        amount: selCbTotal,    color: '#DC642B' },
                   ].filter(m => m.amount > 0).map((m, i) => (
                     <div key={i} style={{ marginBottom: 14 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0, display: 'inline-block' }} />
                           {m.label}
@@ -1267,7 +1283,7 @@ export default function TechnologyShowbackDashboard() {
                     <>
                       <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, margin: '20px 0 4px' }}>What drives {selDeptInfo.label}'s bill</div>
                       <div
-                        style={{ fontSize: 10, color: CYAN, marginBottom: 12, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+                        style={{ fontSize: 12, color: CYAN, marginBottom: 12, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                         onClick={() => setHeroModal({ section: selDeptInfo.label, title: 'All allocated line items', note: `${selDeptRows.length} items · ${periodLabel}`, rows: selDeptRows, total: selDeptTotal, amtKey: selectedDept, colHeader: `${selDeptInfo.label} Share` })}
                       >Top 5 of {selDeptRows.length} line items</div>
                       {selTopItems.map((r, i) => {
@@ -1279,11 +1295,11 @@ export default function TechnologyShowbackDashboard() {
                             <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${getShowbackColor(r.showbackType)}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{ic}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 12, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.description || r.glCategory || '—'}</div>
-                              <div style={{ fontSize: 10, color: '#696F79', marginTop: 1 }}>{ml}</div>
+                              <div style={{ fontSize: 12, color: '#696F79', marginTop: 1 }}>{ml}</div>
                             </div>
                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(amt)}</div>
-                              <div style={{ fontSize: 10, color: '#696F79' }}>{pct(amt, selDeptTotal)}</div>
+                              <div style={{ fontSize: 12, color: '#696F79' }}>{pct(amt, selDeptTotal)}</div>
                             </div>
                           </div>
                         );
@@ -1349,15 +1365,45 @@ export default function TechnologyShowbackDashboard() {
             { key: 'forecast1', label: `FY${baseYear + 1} Forecast`, year: null                 },
             { key: 'forecast2', label: `FY${baseYear + 2} Forecast`, year: null                 },
           ];
+          const TEXT_COLS = [
+            { label:'Branch Name',        k:'branch',           minWidth:130, align:'left',  tdExtra:{},                               val:r=>r.branch||'—' },
+            { label:'G/L Code',           k:'glCode',           minWidth:65,                 tdExtra:{fontFamily:'monospace'},          val:r=>r.glCode||'—' },
+            { label:'Branch Code',        k:'branchCode',       minWidth:65,                 tdExtra:{fontFamily:'monospace'},          val:r=>r.branchCode||'—' },
+            { label:'PID',                k:'pid',              minWidth:75,                 tdExtra:{fontFamily:'monospace'},          val:r=>r.pid||'—' },
+            { label:'GL Category',        k:'glCategory',       minWidth:110,                tdExtra:{},                               val:r=>r.glCategory||'—' },
+            { label:'Cost Model Category',k:'costModelCategory',minWidth:120,                tdExtra:{},                               val:r=>r.costModelCategory||'—' },
+            { label:'Description',        k:'description',      minWidth:200, align:'left',  tdExtra:{whiteSpace:'normal',maxWidth:220},val:r=>r.description||'—' },
+            { label:'Required',           k:'required',         minWidth:90,                 tdExtra:{},                               val:r=>r.required||'—' },
+            { label:'Current Cost Model', k:'currentCostModel', minWidth:160, align:'left',  tdExtra:{whiteSpace:'normal',maxWidth:180},val:r=>r.currentCostModel||'—' },
+            { label:'Allocation',         k:'allocation',       minWidth:80,                 tdExtra:{},                               val:r=>r.allocation||'—' },
+            { label:'Future Cost Model',  k:'futureCostModel',  minWidth:150, align:'left',  tdExtra:{whiteSpace:'normal',maxWidth:180},val:r=>r.futureCostModel||'—' },
+            { label:'Showback Type',      k:'showbackType',     minWidth:170, align:'left',  tdExtra:{whiteSpace:'normal',maxWidth:190},val:r=>r.showbackType||'—' },
+          ];
+          const togglePin = k => setCmtPinnedCols(prev => {
+            const next = new Set(prev); next.has(k) ? next.delete(k) : next.add(k); return next;
+          });
+          const getPinnedLeft = k => {
+            let left = 0;
+            for (const col of TEXT_COLS) {
+              if (col.k === k) break;
+              if (cmtPinnedCols.has(col.k)) left += col.minWidth;
+            }
+            return left;
+          };
+          const pinStyle = (k, baseZIndex = 1) => cmtPinnedCols.has(k) ? {
+            position: 'sticky', left: getPinnedLeft(k), zIndex: baseZIndex,
+            boxShadow: '2px 0 5px rgba(0,0,0,0.12)',
+          } : {};
           const numFmt = (v) => v ? v.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
           const th = (extra = {}) => ({
-            background: NAVY, color: 'white', fontSize: 11, fontWeight: 700,
+            background: NAVY, color: 'white', fontSize: 13, fontWeight: 700,
             padding: '7px 9px', whiteSpace: 'nowrap', textAlign: 'center',
             border: '1px solid rgba(255,255,255,0.15)', position: 'sticky', top: 0, zIndex: 2,
+            userSelect: 'none',
             ...extra,
           });
           const td = (hl, extra = {}) => ({
-            fontSize: 11, padding: '4px 8px', border: '1px solid #EFEFEF',
+            fontSize: 13, padding: '4px 8px', border: '1px solid #EFEFEF',
             background: hl ? HL[hl].bg : 'white',
             color: hl ? HL[hl].text : '#2C2C2C',
             fontWeight: hl && HL[hl].bold ? 700 : 400,
@@ -1369,54 +1415,50 @@ export default function TechnologyShowbackDashboard() {
               {/* Legend */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
                 {LEGEND.map(l => (
-                  <div key={l.color} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#515254' }}>
+                  <div key={l.color} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#515254' }}>
                     <div style={{ width: 13, height: 13, background: l.color, border: '1px solid rgba(0,0,0,0.12)', borderRadius: 2, flexShrink: 0 }} />
                     {l.text}
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: '#696F79' }}>
+                <span style={{ fontSize: 13, color: '#696F79' }}>
                   {applyFilters(filtered, cmtSearch, cmtColFilter).length} of {filtered.length} rows · department allocations spread based on actuals
                 </span>
                 <input placeholder="Search all columns…" value={cmtSearch} onChange={e => setCmtSearch(e.target.value)}
-                  style={{ border: `1px solid ${CYAN}`, borderRadius: 4, padding: '4px 10px', fontSize: 11, width: 220, outline: 'none' }} />
+                  style={{ border: `1px solid ${CYAN}`, borderRadius: 4, padding: '4px 10px', fontSize: 13, width: 220, outline: 'none' }} />
               </div>
               {/* Table */}
               <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 260px)', border: '1px solid #E0E0E0', borderRadius: 6 }}>
-                <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      {[
-                        {label:'Branch Name',        k:'branch',           minWidth:130, align:'left'},
-                        {label:'G/L Code',           k:'glCode',           minWidth:65},
-                        {label:'Branch Code',        k:'branchCode',       minWidth:65},
-                        {label:'PID',                k:'pid',              minWidth:75},
-                        {label:'GL Category',        k:'glCategory',       minWidth:110},
-                        {label:'Cost Model Category',k:'costModelCategory',minWidth:120},
-                        {label:'Description',        k:'description',      minWidth:200, align:'left'},
-                        {label:'Required',           k:'required',         minWidth:90},
-                        {label:'Current Cost Model', k:'currentCostModel', minWidth:160, align:'left'},
-                        {label:'Allocation',         k:'allocation',       minWidth:80},
-                        {label:'Future Cost Model',  k:'futureCostModel',  minWidth:150, align:'left'},
-                        {label:'Showback Type',      k:'showbackType',     minWidth:170, align:'left'},
-                      ].map(col => (
-                        <th key={col.k} style={th({ minWidth: col.minWidth, textAlign: col.align||'center', verticalAlign:'top', paddingBottom:4 })}>
-                          <div style={{marginBottom:3}}>{col.label}</div>
-                          <select value={cmtColFilter[col.k]||''} onChange={e=>setCmtColFilter(f=>({...f,[col.k]:e.target.value}))}
-                            style={{ width:'100%', fontSize:9, padding:'1px 2px', cursor:'pointer',
+                      {TEXT_COLS.map(col => {
+                        const pinned = cmtPinnedCols.has(col.k);
+                        return (
+                        <th key={col.k} style={th({ minWidth: col.minWidth, textAlign: col.align||'center', verticalAlign:'top', paddingBottom:4, cursor:'pointer', ...pinStyle(col.k, 4), ...(pinned ? {borderBottom:'2px solid #FFD54F'} : {}) })}
+                            title={pinned ? 'Click to unpin column' : 'Click to pin column'}>
+                          <div style={{marginBottom:3, display:'flex', alignItems:'center', justifyContent:'center', gap:4}}>
+                            {col.label}
+                            <span style={{fontSize:9, opacity: pinned ? 1 : 0.35, transition:'opacity .15s'}}>{pinned ? '📌' : '📌'}</span>
+                          </div>
+                          <div onClick={e => { e.stopPropagation(); togglePin(col.k); }} style={{position:'absolute',inset:0,cursor:'pointer'}} />
+                          <select value={cmtColFilter[col.k]||''} onChange={e=>{e.stopPropagation();setCmtColFilter(f=>({...f,[col.k]:e.target.value}));}}
+                            onClick={e=>e.stopPropagation()}
+                            style={{ width:'100%', fontSize:11, padding:'1px 2px', cursor:'pointer', position:'relative', zIndex:1,
                               border:'1px solid rgba(255,255,255,.3)', borderRadius:2,
                               background: cmtColFilter[col.k] ? CYAN : 'rgba(255,255,255,.12)', color:'white' }}>
                             <option value="" style={{background:'#1a3a5c'}}>All</option>
                             {colUniq(filtered, col.k).map(v=><option key={v} value={v} style={{background:'#1a3a5c'}}>{v}</option>)}
                           </select>
                         </th>
-                      ))}
+                        );
+                      })}
                       {FIN_COLS.map(f => (
                         <th key={f.key} style={th({ minWidth: 95, background: period === f.key ? CYAN : NAVY })}>
                           {f.year ? (
                             <div>
-                              <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.75, marginBottom: 1 }}>{f.year}</div>
+                              <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.75, marginBottom: 1 }}>{f.year}</div>
                               <div>{f.label}</div>
                             </div>
                           ) : f.label}
@@ -1433,18 +1475,9 @@ export default function TechnologyShowbackDashboard() {
                       const hl = getHL(r);
                       return (
                         <tr key={i}>
-                          <td style={td(hl)}>{r.branch || '—'}</td>
-                          <td style={td(hl, { fontFamily: 'monospace' })}>{r.glCode || '—'}</td>
-                          <td style={td(hl, { fontFamily: 'monospace' })}>{r.branchCode || '—'}</td>
-                          <td style={td(hl, { fontFamily: 'monospace' })}>{r.pid || '—'}</td>
-                          <td style={td(hl)}>{r.glCategory || '—'}</td>
-                          <td style={td(hl)}>{r.costModelCategory || '—'}</td>
-                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 220 })}>{r.description || '—'}</td>
-                          <td style={td(hl)}>{r.required || '—'}</td>
-                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 180 })}>{r.currentCostModel || '—'}</td>
-                          <td style={td(hl)}>{r.allocation || '—'}</td>
-                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 180 })}>{r.futureCostModel || '—'}</td>
-                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 190 })}>{r.showbackType || '—'}</td>
+                          {TEXT_COLS.map(col => (
+                            <td key={col.k} style={td(hl, { ...col.tdExtra, ...pinStyle(col.k, 1) })}>{col.val(r)}</td>
+                          ))}
                           {FIN_COLS.map(f => (
                             <td key={f.key} style={td(hl, {
                               textAlign: 'right',
@@ -1454,7 +1487,7 @@ export default function TechnologyShowbackDashboard() {
                           {DEPT_COLS.map(d => (
                             <td key={d.key} style={td(hl, { textAlign: 'right' })}>{numFmt(r[d.key])}</td>
                           ))}
-                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 280, fontSize: 10, color: hl ? HL[hl].text : '#696F79' })}>{r.comments || ''}</td>
+                          <td style={td(hl, { whiteSpace: 'normal', maxWidth: 280, fontSize: 12, color: hl ? HL[hl].text : '#696F79' })}>{r.comments || ''}</td>
                         </tr>
                       );
                     })}
@@ -1475,14 +1508,16 @@ export default function TechnologyShowbackDashboard() {
           // ── Summary ────────────────────────────────────────────────────────
           const _showbackTotal = filtered.reduce((s, r) => s + _rowValue(r), 0);
           const movingToCB = filtered
-            .filter(r => (r.showbackType || '').toLowerCase().includes('chargeback'))
-            .reduce((s, r) => s + _rowValue(r), 0);
+            .filter(r => (r.showbackType || '').toLowerCase().includes('chargeback') && _coverageDepts.some(d => (r[d.key] || 0) !== 0))
+            .reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
 
           // ── Category breakdown ────────────────────────────────────────────
           const catMap = {};
           filtered.forEach(r => {
             const st = r.showbackType || 'None';
             if (_deptRestrictedKeys && st.toLowerCase().startsWith('no showback')) return;
+            // Exclude showback rows with no dept allocation (pending User Listing)
+            if (_isShowbackRow(r) && DEPTS.every(d => (r[d.key] || 0) === 0)) return;
             const cat = r.costModelCategory || 'Uncategorised';
             if (!catMap[cat]) catMap[cat] = { name: cat, total: 0, rows: [], segs: {} };
             const amt = _rowValue(r);
@@ -1504,16 +1539,16 @@ export default function TechnologyShowbackDashboard() {
                 {/* Shown back */}
                 <div style={card({ padding: '18px 20px' })}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>Shown back to business</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${NAVY}1A`, color: NAVY }}>{cmdCoveragePct.toFixed(1)}%</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Shown back to business</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${NAVY}1A`, color: NAVY }}>{cmdCoveragePct.toFixed(1)}%</div>
                   </div>
                   <div onClick={() => setHeroModal({ section: 'By Showback Type', title: 'Shown back to business', note: `${cmdCoveragePct.toFixed(1)}%`, rows: filtered.filter(r => _isShowbackRow(r) && _coverageDepts.some(d => (r[d.key]||0) !== 0)), total: cmdShownBack, rowAmt: _deptRestrictedKeys ? (r => _deptRestrictedKeys.reduce((s, d) => s + (r[d.key] || 0), 0)) : undefined })}
                        style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>{cadShort(cmdShownBack)}</div>
-                  <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => _isShowbackRow(r) && DEPTS.some(d => (r[d.key]||0) !== 0)).length} line items allocated to departments</div>
+                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => _isShowbackRow(r) && DEPTS.some(d => (r[d.key]||0) !== 0)).length} line items allocated to departments</div>
                   <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
                     <div style={{ height: '100%', borderRadius: 3, background: NAVY, width: `${cmdCoveragePct}%` }} />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#696F79' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#696F79' }}>
                     <span>Headcount + Consumption + Chargeback methods</span>
                     <span style={{ fontWeight: 700, color: NAVY, paddingLeft: 6 }}>{cmdCoveragePct.toFixed(1)}%</span>
                   </div>
@@ -1522,12 +1557,12 @@ export default function TechnologyShowbackDashboard() {
                 {/* Not shown back — with three-way breakdown */}
                 {showNotShownBackPanel && <div style={card({ padding: '18px 20px' })}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>Not shown back</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: '#DC642B1A', color: '#DC642B' }}>Needs decision</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Not shown back</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: '#DC642B1A', color: '#DC642B' }}>Needs decision</div>
                   </div>
                   <div onClick={() => setHeroModal({ section: 'By Showback Type', title: 'Not shown back', note: 'Needs decision', rows: filtered.filter(r => !_isShowbackRow(r)), total: cmdNotShownBack, rowAmt: _deptRestrictedKeys ? (r => _deptRestrictedKeys.reduce((s, d) => s + (r[d.key] || 0), 0)) : undefined })}
                        style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>{cadShort(cmdNotShownBack)}</div>
-                  <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => !_isShowbackRow(r)).length} line items · no department owner</div>
+                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => !_isShowbackRow(r)).length} line items · no department owner</div>
                   <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
                     <div style={{ height: '100%', borderRadius: 3, background: '#DC642B', width: `${_showbackTotal > 0 ? cmdNotShownBack / _showbackTotal * 100 : 0}%` }} />
                   </div>
@@ -1540,10 +1575,10 @@ export default function TechnologyShowbackDashboard() {
                       { label: 'Needs User Listing',    amount: cmdPendingUserList,   note: 'Pending data',   rows: filtered.filter(r => _isShowbackRow(r) && (r.comments||'').includes('User Based Listing') && DEPTS.every(d => (r[d.key]||0) === 0)) },
                     ].map((row, j) => (
                       <div key={j} style={{ flex: 1, borderRight: j < 3 ? '1px solid #F2F2F2' : 'none', paddingRight: j < 3 ? 10 : 0, paddingLeft: j > 0 ? 10 : 0 }}>
-                        <div style={{ fontSize: 9, color: '#A0A8B4', marginBottom: 3, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' }}>{row.label}</div>
+                        <div style={{ fontSize: 11, color: '#A0A8B4', marginBottom: 3, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' }}>{row.label}</div>
                         <div onClick={() => setHeroModal({ section: 'Not Shown Back', title: row.label, note: row.note, rows: row.rows, total: row.amount })}
                              style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2 }}>{cadShort(row.amount)}</div>
-                        <div style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 5, display: 'inline-block', background: '#F2F2F2', color: '#696F79' }}>{row.note}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 5, display: 'inline-block', background: '#F2F2F2', color: '#696F79' }}>{row.note}</div>
                       </div>
                     ))}
                   </div>
@@ -1552,16 +1587,16 @@ export default function TechnologyShowbackDashboard() {
                 {/* Moving to chargeback */}
                 <div style={card({ padding: '18px 20px' })}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>Moving to chargeback</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${SLATE}1A`, color: SLATE }}>Transitioning</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Moving to chargeback</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${SLATE}1A`, color: SLATE }}>Transitioning</div>
                   </div>
-                  <div onClick={() => setHeroModal({ section: 'By Showback Type', title: 'Moving to chargeback', note: 'Transitioning', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes('chargeback') && (_deptRestrictedKeys ? _deptRestrictedKeys.some(d => (r[d.key]||0) !== 0) : true)), total: movingToCB, rowAmt: _deptRestrictedKeys ? (r => _deptRestrictedKeys.reduce((s, d) => s + (r[d.key] || 0), 0)) : undefined })}
+                  <div onClick={() => setHeroModal({ section: 'By Showback Type', title: 'Moving to chargeback', note: 'Transitioning', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes('chargeback') && _coverageDepts.some(d => (r[d.key]||0) !== 0)), total: movingToCB, rowAmt: _deptRestrictedKeys ? (r => _deptRestrictedKeys.reduce((s, d) => s + (r[d.key] || 0), 0)) : undefined })}
                        style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>{cadShort(movingToCB)}</div>
-                  <div style={{ fontSize: 11, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => (r.showbackType||'').toLowerCase().includes('chargeback')).length} items · transitions to direct chargeback</div>
+                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => (r.showbackType||'').toLowerCase().includes('chargeback') && _coverageDepts.some(d => (r[d.key]||0) !== 0)).length} items · transitions to direct chargeback</div>
                   <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
                     <div style={{ height: '100%', borderRadius: 3, background: SLATE, width: `${_showbackTotal > 0 ? movingToCB / _showbackTotal * 100 : 0}%` }} />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#696F79' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#696F79' }}>
                     <span>Consumption showback for 1 year, then chargeback in FY{baseYear + 1}</span>
                     <span style={{ fontWeight: 700, color: SLATE, paddingLeft: 6 }}>{pct(movingToCB, _showbackTotal)}</span>
                   </div>
@@ -1572,7 +1607,7 @@ export default function TechnologyShowbackDashboard() {
               {/* ── 2. Category breakdown ────────────────────────────────── */}
               <div style={card({ padding: '20px 22px' })}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 2 }}>By Cost Model Category</div>
-                <div style={{ fontSize: 11, color: '#696F79', marginBottom: 20 }}>Hover a row to focus · shows showback method mix within each category</div>
+                <div style={{ fontSize: 13, color: '#696F79', marginBottom: 20 }}>Hover a row to focus · shows showback method mix within each category</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {catData.map(cat => (
                     <div key={cat.name}
@@ -1580,10 +1615,10 @@ export default function TechnologyShowbackDashboard() {
                          onMouseLeave={() => setSbHoverCat(null)}>
                       {/* Category label + total */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700,
+                        <div style={{ fontSize: 13, fontWeight: 700,
                                       color: sbHoverCat === cat.name ? NAVY : '#696F79',
                                       transition: 'color .2s' }}>{cat.name}</div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: sbHoverCat === cat.name ? NAVY : '#A0A8B0',
+                        <div style={{ fontSize: 13, fontWeight: 600, color: sbHoverCat === cat.name ? NAVY : '#A0A8B0',
                                       transition: 'color .2s' }}>{cadShort(cat.total)}</div>
                       </div>
                       {/* Stacked bar */}
@@ -1613,7 +1648,7 @@ export default function TechnologyShowbackDashboard() {
                             .filter(([, v]) => v > 0)
                             .sort(([, a], [, b]) => b - a)
                             .map(([st, val]) => (
-                              <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#696F79' }}>
+                              <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#696F79' }}>
                                 <div style={{ width: 7, height: 7, borderRadius: 2, background: getShowbackColor(st), flexShrink: 0 }} />
                                 <span>{st || 'None'}</span>
                                 <span style={{ fontWeight: 700, color: NAVY }}>{pct(val, cat.total)}</span>
@@ -1627,7 +1662,7 @@ export default function TechnologyShowbackDashboard() {
                 {/* Static legend */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 24, paddingTop: 14, borderTop: '1px solid #F2F2F2' }}>
                   {uniqueShowbacks.filter(st => !_deptRestrictedKeys || !st.toLowerCase().startsWith('no showback')).map(st => (
-                    <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#696F79' }}>
+                    <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#696F79' }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: getShowbackColor(st), flexShrink: 0 }} />
                       {st || 'None'}
                     </div>
