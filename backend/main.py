@@ -47,6 +47,29 @@ with engine.connect() as _c:
     except Exception:
         _c.rollback()
 
+# ── Production safety checks ──────────────────────────────────────────────────
+if os.getenv("APP_ENV") == "production":
+    _WEAK = {"", "replace-with-64-char-hex-string",
+             "replace-with-a-different-64-char-hex-string",
+             "CHANGE_THIS_IN_PRODUCTION"}
+    if os.getenv("JWT_SECRET_KEY", "") in _WEAK:
+        raise RuntimeError(
+            "FATAL: JWT_SECRET_KEY is not set or is still the placeholder. "
+            "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    if os.getenv("SESSION_SECRET", "") in _WEAK:
+        raise RuntimeError(
+            "FATAL: SESSION_SECRET is not set or is still the placeholder. "
+            "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    if os.getenv("STORAGE_BACKEND", "local") == "local":
+        import warnings
+        warnings.warn(
+            "WARNING: STORAGE_BACKEND=local in production — uploaded cost data will be "
+            "lost on every container restart. Set STORAGE_BACKEND=azure and configure "
+            "AZURE_STORAGE_CONNECTION_STRING.", stacklevel=1,
+        )
+
 app = FastAPI(
     title="Technology Showback Dashboard API",
     version="1.0.0",
