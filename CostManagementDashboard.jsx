@@ -509,6 +509,7 @@ export default function TechnologyShowbackDashboard() {
   const cmdPendingUserList = filtered
     .filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key] || 0) === 0))
     .reduce((s, r) => s + r.actuals, 0);
+
   const cmdNotShownBack = filtered
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
     .reduce((s, r) => s + _rowValue(r), 0);
@@ -525,9 +526,8 @@ export default function TechnologyShowbackDashboard() {
     .filter(r => (r.showbackType || '').toLowerCase() === 'no showback')
     .reduce((s, r) => s + r.actuals, 0);
   const cmdNoShowbackTech = filtered
-    .filter(r => (r.currentCostModel || '').toLowerCase().includes('direct allocation to technology')
-              && (r.allocation || '').trim().toLowerCase() === 'technology')
-    .reduce((s, r) => s + (r.technology || 0), 0);
+    .filter(r => (r.showbackType || '').toLowerCase().includes("technology's portion"))
+    .reduce((s, r) => s + r.actuals, 0);
   const cmdNotConfigured  = filtered
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none'; })
     .reduce((s, r) => s + r.actuals, 0);
@@ -774,10 +774,9 @@ export default function TechnologyShowbackDashboard() {
             ...(showNotShownBackPanel ? [{
               label:     'Not Shown Back · Breakdown',
               breakdown: [
-                { label: 'No Showback',          amount: cmdNoShowback,      color: 'rgba(255,255,255,.85)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                { label: "Technology's Portion", amount: cmdNoShowbackTech,  color: 'rgba(255,255,255,.85)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
-                { label: 'Not Configured',       amount: cmdNotConfigured,   color: '#FFD54F',               note: 'Needs decision', section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
-                { label: 'Needs User Listing',   amount: cmdPendingUserList, color: '#FFB300',               note: 'Missing data',   section: 'Not Shown Back', rows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)) },
+                { label: 'No Showback',          amount: cmdNoShowback,         color: 'rgba(255,255,255,.85)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+                { label: "Technology's Portion", amount: cmdNoShowbackTech,     color: 'rgba(255,255,255,.85)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
+                { label: 'Not Configured',       amount: cmdNotConfigured,      color: '#FFD54F',               note: 'Needs decision', section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
               ],
             }] : []),
           ].map((c, i) => (
@@ -1566,9 +1565,8 @@ export default function TechnologyShowbackDashboard() {
                   <div style={{ display: 'flex', gap: 0, paddingTop: 10, borderTop: '1px solid #F2F2F2' }}>
                     {[
                       { label: 'No Showback',          amount: cmdNoShowback,        note: 'Intentional',    rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                      { label: "Technology's Portion",  amount: cmdNoShowbackTech,    note: 'Tech-specific',  rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
-                      { label: 'Not Configured',        amount: cmdNotConfigured,     note: 'Needs decision', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
-                      { label: 'Needs User Listing',    amount: cmdPendingUserList,   note: 'Missing data',   rows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)) },
+                      { label: "Technology's Portion", amount: cmdNoShowbackTech,    note: 'Tech-specific',  rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
+                      { label: 'Not Configured',       amount: cmdNotConfigured,     note: 'Needs decision', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
                     ].map((row, j) => (
                       <div key={j} style={{ flex: 1, borderRight: j < 3 ? '1px solid #F2F2F2' : 'none', paddingRight: j < 3 ? 10 : 0, paddingLeft: j > 0 ? 10 : 0 }}>
                         <div style={{ fontSize: 11, color: '#A0A8B4', marginBottom: 3, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' }}>{row.label}</div>
@@ -2908,7 +2906,7 @@ export default function TechnologyShowbackDashboard() {
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginBottom: 3 }}>{heroModal.rows.length} line items</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginBottom: 3 }}>{heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || 'actuals'] || 0))(r) !== 0).length} line items</div>
                   <div style={{ fontSize: 24, fontWeight: 700, color: CYAN, letterSpacing: '-0.5px' }}>{cad(heroModal.total)}</div>
                 </div>
                 <button
@@ -2933,7 +2931,8 @@ export default function TechnologyShowbackDashboard() {
                 <tbody>
                   {(() => {
                     const getAmt = heroModal.rowAmt || (r => r[heroModal.amtKey || 'actuals'] || 0);
-                    return [...heroModal.rows].sort((a, b) => getAmt(b) - getAmt(a)).map((r, i) => (
+                    const visibleRows = [...heroModal.rows].filter(r => getAmt(r) !== 0).sort((a, b) => getAmt(b) - getAmt(a));
+                    return visibleRows.map((r, i) => (
                       <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#FAFBFC', borderBottom: '1px solid #F0F0F0' }}>
                         <td style={{ padding: '9px 16px', color: '#2C2C2C', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description || r.pid}>{r.description || r.pid || '—'}</td>
                         <td style={{ padding: '9px 10px', color: '#515254', fontFamily: 'monospace', fontSize: 11 }}>{r.branchCode}</td>
@@ -2946,7 +2945,7 @@ export default function TechnologyShowbackDashboard() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#EEF2F7', borderTop: '2px solid #D0DAE8' }}>
-                    <td colSpan={4} style={{ padding: '11px 16px', fontWeight: 700, color: NAVY, fontSize: 12 }}>Total — {heroModal.rows.length} items</td>
+                    <td colSpan={4} style={{ padding: '11px 16px', fontWeight: 700, color: NAVY, fontSize: 12 }}>Total — {heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || 'actuals'] || 0))(r) !== 0).length} items</td>
                     <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: NAVY, fontSize: 13 }}>{cad(heroModal.total)}</td>
                   </tr>
                 </tfoot>
