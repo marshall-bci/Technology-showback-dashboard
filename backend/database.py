@@ -20,6 +20,7 @@ class User(Base):
     is_admin               = Column(Boolean, default=False)
     is_active              = Column(Boolean, default=True)
     can_edit_user_listing  = Column(Boolean, default=False)
+    can_view_quality       = Column(Boolean, default=False)
     # Empty list = no access. Admins bypass this check entirely.
     allowed_gl_codes    = Column(JSON, default=list)
     allowed_branches    = Column(JSON, default=list)

@@ -87,7 +87,7 @@ const ALL_TABS = [
   { id: 'overview',        label: 'Overview'          },
   { id: 'costmanagement',  label: 'Cost Management',  techOnly: true },
   { id: 'showback',    label: 'By Showback Type'  },
-  { id: 'quality',     label: 'Data Quality',     techOnly: true },
+  { id: 'quality',     label: 'Data Quality',     qualityOnly: true },
   { id: 'userlisting', label: 'My User Listing',  canEditUL: true },
   { id: 'upload',      label: 'Upload (Test)',     adminOnly: true },
   { id: 'admin',       label: 'Admin',             adminOnly: true },
@@ -181,8 +181,9 @@ export default function TechnologyShowbackDashboard() {
   const [cmtPinnedCols,   setCmtPinnedCols]   = useState(new Set(['branch']));
   const [userFormEmail,   setUserFormEmail]   = useState('');
   const [userFormName,    setUserFormName]    = useState('');
-  const [userFormAdmin,      setUserFormAdmin]      = useState(false);
-  const [userFormCanEditUL,  setUserFormCanEditUL]  = useState(false);
+  const [userFormAdmin,         setUserFormAdmin]         = useState(false);
+  const [userFormCanEditUL,     setUserFormCanEditUL]     = useState(false);
+  const [userFormCanViewQuality,setUserFormCanViewQuality]= useState(false);
   const [userFormGLs,        setUserFormGLs]        = useState([]);
   const [userFormBranch,     setUserFormBranch]     = useState([]);
   const [userFormDepts,      setUserFormDepts]      = useState([]);
@@ -365,6 +366,7 @@ export default function TechnologyShowbackDashboard() {
   const resetUserForm = () => {
     setUserFormEmail(''); setUserFormName(''); setUserFormAdmin(false);
     setUserFormCanEditUL(false);
+    setUserFormCanViewQuality(false);
     setUserFormGLs([]); setUserFormBranch([]); setUserFormDepts([]);
     setGlDropOpen(false); setBranchDropOpen(false); setDeptsDropOpen(false);
     setEditingUser(null); setAdminMsg('');
@@ -375,6 +377,7 @@ export default function TechnologyShowbackDashboard() {
     setUserFormName(u.display_name || '');
     setUserFormAdmin(u.is_admin);
     setUserFormCanEditUL(u.can_edit_user_listing || false);
+    setUserFormCanViewQuality(u.can_view_quality || false);
     setUserFormGLs(u.allowed_gl_codes || []);
     setUserFormBranch(u.allowed_branches || []);
     setUserFormDepts(u.allowed_departments || []);
@@ -389,6 +392,7 @@ export default function TechnologyShowbackDashboard() {
       display_name:           userFormName.trim() || undefined,
       is_admin:               userFormAdmin,
       can_edit_user_listing:  userFormCanEditUL,
+      can_view_quality:       userFormCanViewQuality,
       allowed_gl_codes:       userFormGLs,
       allowed_branches:       userFormBranch,
       allowed_departments:    userFormDepts,
@@ -429,21 +433,29 @@ export default function TechnologyShowbackDashboard() {
   };
 
   // ── Filtered rows ───────────────────────────────────────────────────────────
-  const filtered = rows.filter(r => {
+  const filteredRaw = rows.filter(r => {
     if (filterShowback !== 'All' && (r.showbackType || 'None') !== filterShowback) return false;
     if (filterCostModel !== 'All' && r.currentCostModel !== filterCostModel) return false;
     if (filterDept !== 'All' && !r[filterDept]) return false;
     return true;
+  });
+  // When a non-actuals period is selected, scale dept allocation columns proportionally
+  // so that all dept-level breakdowns reflect the selected period's amounts.
+  const filtered = period === 'actuals' ? filteredRaw : filteredRaw.map(r => {
+    const scale = r.actuals > 0 ? (r[period] || 0) / r.actuals : 0;
+    const scaled = { ...r };
+    DEPTS.forEach(d => { scaled[d.key] = (r[d.key] || 0) * scale; });
+    return scaled;
   });
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const totalPeriod  = filtered.reduce((s, r) => s + (r[period] || 0), 0);
   const totalActuals = filtered.reduce((s, r) => s + r.actuals, 0);
   const totalBudget  = filtered.reduce((s, r) => s + r.budget, 0);
-  const techActuals  = filtered
-    .filter(r => (r.currentCostModel || '').toLowerCase().includes('direct allocation to technology')
-              && (r.allocation || '').trim().toLowerCase() === 'technology')
-    .reduce((s, r) => s + (r.technology || 0), 0);
+  const _isTechPortion = r => (r.showbackType || '').toLowerCase().includes("technology's portion");
+  const techActuals  = filteredRaw
+    .filter(_isTechPortion)
+    .reduce((s, r) => s + (r[period] || 0), 0);
   const flaggedCount = filtered.filter(r => r.comments).length;
 
   const _deptRestrictedKeys = (user?.allowed_departments?.length && !user.allowed_departments.includes('Technology'))
@@ -454,13 +466,15 @@ export default function TechnologyShowbackDashboard() {
     : (r[period] || 0);
   const showbackPieData = Object.entries(
     filtered.reduce((acc, r) => {
-      const st = r.showbackType || 'None';
+      let st = r.showbackType || 'None';
+      const stl = st.toLowerCase();
+      const cm  = (r.currentCostModel || '').toLowerCase();
       if (_deptRestrictedKeys) {
-        const stl = st.toLowerCase();
         if (stl.startsWith('no showback')) return acc;
+        if (cm.includes('chargeback') && !stl.startsWith('no showback')) st = 'Direct Chargeback';
       }
       // Exclude showback rows with no dept allocation yet (pending User Listing)
-      if ((st || '').toLowerCase().startsWith('showback') && DEPTS.every(d => (r[d.key] || 0) === 0)) return acc;
+      if (stl.startsWith('showback') && DEPTS.every(d => (r[d.key] || 0) === 0)) return acc;
       acc[st] = (acc[st] || 0) + _rowValue(r);
       return acc;
     }, {})
@@ -499,16 +513,16 @@ export default function TechnologyShowbackDashboard() {
   // allocated) / total actuals FY2026.
   // "startsWith showback" catches all three types; excludes "No showback*" and "None".
   // Bracket = subset stuck specifically because User Based Listing data is missing.
-  const cmdCoverageBase    = totalActuals;
+  const cmdCoverageBase    = totalPeriod;
   const _isShowbackRow     = r => (r.showbackType || '').toLowerCase().startsWith('showback');
   // For dept-restricted users sum only their dept columns; Technology/All users sum all depts.
   const _coverageDepts     = _deptRestrictedKeys || DEPTS;
   const cmdShownBack       = filtered
     .filter(r => _isShowbackRow(r) && _coverageDepts.some(d => (r[d.key] || 0) !== 0))
     .reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
-  const cmdPendingUserList = filtered
+  const cmdPendingUserList = filteredRaw
     .filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key] || 0) === 0))
-    .reduce((s, r) => s + r.actuals, 0);
+    .reduce((s, r) => s + (r[period] || 0), 0);
 
   const cmdNotShownBack = filtered
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
@@ -522,15 +536,15 @@ export default function TechnologyShowbackDashboard() {
   const cmdTotalFlags     = rows.filter(r => r.comments).length;
   const cmdReadinessPct   = rows.length > 0 ? ((rows.length - cmdTotalFlags) / rows.length * 100) : 0;
   // Not-shown-back breakdown — three distinct categories
-  const cmdNoShowback     = filtered
+  const cmdNoShowback     = filteredRaw
     .filter(r => (r.showbackType || '').toLowerCase() === 'no showback')
-    .reduce((s, r) => s + r.actuals, 0);
-  const cmdNoShowbackTech = filtered
+    .reduce((s, r) => s + (r[period] || 0), 0);
+  const cmdNoShowbackTech = filteredRaw
     .filter(r => (r.showbackType || '').toLowerCase().includes("technology's portion"))
-    .reduce((s, r) => s + r.actuals, 0);
-  const cmdNotConfigured  = filtered
+    .reduce((s, r) => s + (r[period] || 0), 0);
+  const cmdNotConfigured  = filteredRaw
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none'; })
-    .reduce((s, r) => s + r.actuals, 0);
+    .reduce((s, r) => s + (r[period] || 0), 0);
 
   const dynamicPeriods = [
     { key: 'actuals',   label: `FY${baseYear} (Actual)`   },
@@ -567,9 +581,10 @@ export default function TechnologyShowbackDashboard() {
   const availableGLs      = [...new Set(rows.map(r => r.glCode).filter(Boolean))].sort();
   const availableBranches = [...new Set(rows.map(r => r.branchCode).filter(Boolean))].sort();
   const TABS = ALL_TABS.filter(t => {
-    if (t.adminOnly) return user?.is_admin;
-    if (t.canEditUL) return user?.can_edit_user_listing && !user?.is_admin;
-    if (t.techOnly)  return !_deptRestrictedKeys;
+    if (t.adminOnly)   return user?.is_admin;
+    if (t.canEditUL)   return user?.can_edit_user_listing && !user?.is_admin;
+    if (t.qualityOnly) return user?.is_admin || user?.can_view_quality;
+    if (t.techOnly)    return !_deptRestrictedKeys;
     return true;
   });
 
@@ -900,19 +915,22 @@ export default function TechnologyShowbackDashboard() {
           const _deptRowAmt = _deptRestrictedKeys
             ? (r => _deptRestrictedKeys.reduce((s, d) => s + (r[d.key] || 0), 0))
             : null;
-          const _deptTotal  = _deptRowAmt ? filtered.reduce((s, r) => s + _deptRowAmt(r), 0) : totalActuals;
+          const _deptTotal  = _deptRowAmt ? filtered.reduce((s, r) => s + _deptRowAmt(r), 0) : totalPeriod;
           const belowThresholdRows = filtered.filter(r => {
-            const amt = _deptRowAmt ? _deptRowAmt(r) : r.actuals;
+            const amt = _deptRowAmt ? _deptRowAmt(r) : (r[period] || 0);
             return amt > 0 && amt < 25_000 && (r.showbackType || '').toLowerCase().startsWith('showback');
           });
           const belowThresholdTotal = belowThresholdRows.reduce((s, r) => s + (_deptRowAmt ? _deptRowAmt(r) : DEPTS.reduce((ds, d) => ds + (r[d.key] || 0), 0)), 0);
           const selDeptInfo  = selectedDept ? DEPTS.find(d => d.key === selectedDept) : null;
-          const selDeptRows  = selectedDept ? filtered.filter(r => _isApproachRow(r) && (r[selectedDept] || 0) > 0 && (_deptRestrictedKeys ? !_isDirectCB(r) : true)) : [];
+          const selDeptRows  = selectedDept ? filtered.filter(r => _isApproachRow(r) && (r[selectedDept] || 0) > 0 && (_deptRestrictedKeys ? !(r.showbackType || '').toLowerCase().startsWith('no showback') : true)) : [];
           const selMethodAmt = (test) => selDeptRows.filter(r => test(r)).reduce((s, r) => s + (r[selectedDept] || 0), 0);
-          const selHcTotal    = selMethodAmt(r => (r.showbackType || '').toLowerCase().includes('headcount'));
-          const selConTotal   = selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback'); });
-          const selConCbTotal = selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback'); });
-          const selCbTotal    = selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); const cm = (r.currentCostModel||'').toLowerCase(); return !st.includes('headcount') && !st.includes('consumption') && (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount'))); });
+          const _isCbCm = r => (r.currentCostModel || '').toLowerCase().includes('chargeback') && !((r.showbackType||'').toLowerCase().startsWith('no showback'));
+          const selHcTotal    = selMethodAmt(r => (r.showbackType || '').toLowerCase().includes('headcount') && (_deptRestrictedKeys ? !_isCbCm(r) : true));
+          const selConTotal   = selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback') && (_deptRestrictedKeys ? !_isCbCm(r) : true); });
+          const selConCbTotal = selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback') && (_deptRestrictedKeys ? !_isCbCm(r) : true); });
+          const selCbTotal    = _deptRestrictedKeys
+            ? selMethodAmt(r => _isCbCm(r))
+            : selMethodAmt(r => { const st = (r.showbackType||'').toLowerCase(); const cm = (r.currentCostModel||'').toLowerCase(); return !st.includes('headcount') && !st.includes('consumption') && (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount'))); });
           const selDeptTotal  = selHcTotal + selConTotal + selConCbTotal + selCbTotal;
           const selTopItems   = [...selDeptRows].sort((a,b) => (b[selectedDept]||0) - (a[selectedDept]||0)).slice(0, 5);
           const selMethodLabel = (r) => { const st = (r.showbackType||'').toLowerCase(); if (st.includes('headcount')) return 'Headcount-based'; if (st.includes('consumption') && st.includes('chargeback')) return 'Consumption → Chargeback'; if (st.includes('consumption')) return 'Consumption-based'; if (st.includes('chargeback') || (r.currentCostModel||'').toLowerCase().includes('chargeback')) return 'Direct chargeback'; return 'Absorbed by Technology'; };
@@ -944,7 +962,17 @@ export default function TechnologyShowbackDashboard() {
                 return st.includes('consumption') && st.includes('chargeback') && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
             },
-            ...(!_deptRestrictedKeys ? [{
+            ...(_deptRestrictedKeys ? [{
+              name: 'Direct Chargeback',
+              badge: 'LOB-specific',
+              color: '#DC642B',
+              meta: 'Hard-charged to owning LOB · confirmation required each cycle',
+              rows: filtered.filter(r => {
+                const cm = (r.currentCostModel || '').toLowerCase();
+                const st = (r.showbackType || '').toLowerCase();
+                return cm.includes('chargeback') && !st.startsWith('no showback') && _deptRestrictedKeys.some(d => (r[d.key] || 0) !== 0);
+              }),
+            }] : [{
               name: 'Direct Chargeback',
               badge: 'LOB-specific',
               color: '#DC642B',
@@ -955,7 +983,7 @@ export default function TechnologyShowbackDashboard() {
                 return (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount')))
                   && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
-            }] : []),
+            }]),
           ];
           return (
           <div>
@@ -1013,7 +1041,7 @@ export default function TechnologyShowbackDashboard() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Cost by Showback Type</div>
                 <div style={{ fontSize: 13, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                  <div style={{ flexShrink: 0, width: 168, height: 168 }}>
+                  <div style={{ flexShrink: 0, width: 168, height: 168 }} onMouseLeave={() => setHoveredSegment(null)}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -1092,7 +1120,7 @@ export default function TechnologyShowbackDashboard() {
                 How the {cadShort(cmdShownBack)} shown back is distributed across the four active allocation methods
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${_deptRestrictedKeys ? 3 : 4}, 1fr)`, gap: 14, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(4, 1fr)`, gap: 14, marginBottom: 20 }}>
               {approaches.map((ap, i) => {
                 const apTotal = ap.rows.reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
                 const apBase  = filtered.reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
@@ -1150,11 +1178,11 @@ export default function TechnologyShowbackDashboard() {
                   color: NAVY,
                   amount: cadShort(techActuals),
                   rawTotal: techActuals,
-                  rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase()==='technology'),
-                  subLine: `${pct(techActuals, totalActuals)} of total actuals · ${filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase()==='technology').length} line items`,
-                  barPct: totalActuals > 0 ? techActuals / totalActuals * 100 : 0,
+                  rows: filtered.filter(_isTechPortion),
+                  subLine: `${pct(techActuals, totalPeriod)} of total · ${filteredRaw.filter(_isTechPortion).length} line items`,
+                  barPct: totalPeriod > 0 ? techActuals / totalPeriod * 100 : 0,
                   meta: 'Costs absorbed by Technology, not yet shown back',
-                  pctLabel: pct(techActuals, totalActuals),
+                  pctLabel: pct(techActuals, totalPeriod),
                 },
                 {
                   name: 'Below $25K Threshold',
@@ -1672,10 +1700,10 @@ export default function TechnologyShowbackDashboard() {
         {/* DATA QUALITY                                                       */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {activeTab === 'quality' && (() => {
-          const belowMaterialityRows = rows.filter(r =>
-            r.actuals > 0 && r.actuals < 25_000 &&
-            r.showbackType && r.showbackType !== 'None'
-          );
+          const belowMaterialityRows = rows.filter(r => {
+            const amt = r[period] || 0;
+            return amt > 0 && amt < 25_000 && r.showbackType && r.showbackType !== 'None';
+          });
           return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {flaggedRows.length === 0 ? (
@@ -1741,7 +1769,7 @@ export default function TechnologyShowbackDashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: NAVY, color: 'white' }}>
-                        {['PID', 'Description', 'Showback Type', 'Cost Model', 'Actuals'].map((h, i) => (
+                        {['PID', 'Description', 'Showback Type', 'Cost Model', periodLabel].map((h, i) => (
                           <th key={h} style={{ padding: '10px 12px', fontWeight: 600, textAlign: i === 4 ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -1755,7 +1783,7 @@ export default function TechnologyShowbackDashboard() {
                             <span style={{ background: getShowbackColor(r.showbackType), color: 'white', borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 500 }}>{r.showbackType}</span>
                           </td>
                           <td style={{ padding: '8px 12px', fontSize: 11, color: '#515254', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.currentCostModel}>{r.currentCostModel}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: '#FF9800' }}>{cad(r.actuals)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: '#FF9800' }}>{cad(r[period] || 0)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1950,7 +1978,7 @@ export default function TechnologyShowbackDashboard() {
                     const res = await fetch(`${API_URL}/api/recalculate`, {
                       method: 'POST', credentials: 'include',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ period, headcountYear: recalcHcYear }),
+                      body: JSON.stringify({ period: 'actuals', headcountYear: recalcHcYear }),
                     });
                     if (res.ok) {
                       const d = await res.json();
@@ -2065,6 +2093,12 @@ export default function TechnologyShowbackDashboard() {
                                 borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 600, marginLeft: 4,
                               }}>UL Editor</span>
                             )}
+                            {u.can_view_quality && !u.is_admin && (
+                              <span style={{
+                                background: '#E8F0FF', color: '#3949AB',
+                                borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 600, marginLeft: 4,
+                              }}>Data Quality</span>
+                            )}
                           </td>
                           <td style={{ padding: '8px 12px', fontSize: 11, color: '#515254', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(u.allowed_gl_codes || []).join(', ')}>
                             {(u.allowed_gl_codes || []).length === 0 ? <span style={{ color: '#BBB' }}>All</span> : (u.allowed_gl_codes || []).join(', ')}
@@ -2164,10 +2198,16 @@ export default function TechnologyShowbackDashboard() {
                     <input type="checkbox" checked={userFormAdmin} onChange={e => setUserFormAdmin(e.target.checked)} />
                     <span style={{ fontSize: 13, color: '#515254' }}>Admin (can upload data &amp; manage users)</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <input type="checkbox" checked={userFormCanEditUL} onChange={e => setUserFormCanEditUL(e.target.checked)} disabled={userFormAdmin} />
                     <span style={{ fontSize: 13, color: userFormAdmin ? '#BFBFBF' : '#515254' }}>
                       Can edit User Listing (for their branches)
+                    </span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <input type="checkbox" checked={userFormCanViewQuality} onChange={e => setUserFormCanViewQuality(e.target.checked)} disabled={userFormAdmin} />
+                    <span style={{ fontSize: 13, color: userFormAdmin ? '#BFBFBF' : '#515254' }}>
+                      Can view Data Quality tab
                     </span>
                   </label>
                   {adminMsg && (
@@ -2906,7 +2946,7 @@ export default function TechnologyShowbackDashboard() {
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginBottom: 3 }}>{heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || 'actuals'] || 0))(r) !== 0).length} line items</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginBottom: 3 }}>{heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0))(r) !== 0).length} line items</div>
                   <div style={{ fontSize: 24, fontWeight: 700, color: CYAN, letterSpacing: '-0.5px' }}>{cad(heroModal.total)}</div>
                 </div>
                 <button
@@ -2930,7 +2970,7 @@ export default function TechnologyShowbackDashboard() {
                 </thead>
                 <tbody>
                   {(() => {
-                    const getAmt = heroModal.rowAmt || (r => r[heroModal.amtKey || 'actuals'] || 0);
+                    const getAmt = heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0);
                     const visibleRows = [...heroModal.rows].filter(r => getAmt(r) !== 0).sort((a, b) => getAmt(b) - getAmt(a));
                     return visibleRows.map((r, i) => (
                       <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#FAFBFC', borderBottom: '1px solid #F0F0F0' }}>
@@ -2945,7 +2985,7 @@ export default function TechnologyShowbackDashboard() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#EEF2F7', borderTop: '2px solid #D0DAE8' }}>
-                    <td colSpan={4} style={{ padding: '11px 16px', fontWeight: 700, color: NAVY, fontSize: 12 }}>Total — {heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || 'actuals'] || 0))(r) !== 0).length} items</td>
+                    <td colSpan={4} style={{ padding: '11px 16px', fontWeight: 700, color: NAVY, fontSize: 12 }}>Total — {heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0))(r) !== 0).length} items</td>
                     <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: NAVY, fontSize: 13 }}>{cad(heroModal.total)}</td>
                   </tr>
                 </tfoot>

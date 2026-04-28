@@ -42,6 +42,11 @@ with engine.connect() as _c:
     except Exception:
         _c.rollback()
     try:
+        _c.execute(_sql_text("ALTER TABLE users ADD COLUMN can_view_quality BOOLEAN DEFAULT 0"))
+        _c.commit()
+    except Exception:
+        _c.rollback()
+    try:
         _c.execute(_sql_text("ALTER TABLE users ADD COLUMN allowed_departments JSON DEFAULT '[]'"))
         _c.commit()
     except Exception:
@@ -213,6 +218,7 @@ async def create_user(request: Request, user_in: UserCreate,
         display_name=user_in.display_name or user_in.email.split("@")[0],
         is_admin=user_in.is_admin,
         can_edit_user_listing=user_in.can_edit_user_listing,
+        can_view_quality=user_in.can_view_quality,
         allowed_gl_codes=user_in.allowed_gl_codes,
         allowed_branches=user_in.allowed_branches,
         allowed_departments=user_in.allowed_departments,

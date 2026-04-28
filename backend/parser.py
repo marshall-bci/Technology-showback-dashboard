@@ -84,36 +84,43 @@ def _load_cost_model(ws, db):
 
 
 def _load_headcount(ws, db, spread_year: str):
-    # Row 3 = headers; find column matching spread_year
-    hc_col = None
-    for c in range(1, 21):
-        if str(ws.cell(row=3, column=c).value or '').strip() == spread_year:
-            hc_col = c
-            break
-    # Fallback: rightmost non-empty header after col 3
-    if hc_col is None:
-        for c in range(20, 3, -1):
-            if ws.cell(row=3, column=c).value:
-                hc_col = c
-                break
-    if hc_col is None:
-        return
+    # Find columns for each FY year by scanning row 3 headers
+    def _find_col(label):
+        for c in range(1, 25):
+            cell = str(ws.cell(row=3, column=c).value or '').strip().upper()
+            if label.upper() in cell:
+                return c
+        return None
+
+    col2026 = _find_col('FY2026') or _find_col('2026')
+    col2027 = _find_col('FY2027') or _find_col('2027')
+    col2028 = _find_col('FY2028') or _find_col('2028')
+
+    # Fallback to positional columns D(4), E(5), F(6) if headers not found
+    if col2026 is None and col2027 is None and col2028 is None:
+        col2026, col2027, col2028 = 4, 5, 6
+
+    def _cell_float(row, col):
+        if col is None:
+            return 0.0
+        v = ws.cell(row=row, column=col).value
+        try:
+            return float(v) if v is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
 
     db.query(HeadcountEntry).delete()
     for r in range(4, 31):
         short_code = str(ws.cell(row=r, column=2).value or '').strip()
         if not short_code or short_code.lower() == 'cir':
             continue
-        val = ws.cell(row=r, column=hc_col).value
-        try:
-            fy2026 = float(val) if val is not None else 0.0
-        except (ValueError, TypeError):
-            fy2026 = 0.0
         db.add(HeadcountEntry(
-            dept_code = str(ws.cell(row=r, column=1).value or '').strip(),
+            dept_code  = str(ws.cell(row=r, column=1).value or '').strip(),
             short_code = short_code,
             dept_name  = str(ws.cell(row=r, column=3).value or '').strip(),
-            fy2026     = fy2026,
+            fy2026     = _cell_float(r, col2026),
+            fy2027     = _cell_float(r, col2027),
+            fy2028     = _cell_float(r, col2028),
         ))
     db.commit()
 

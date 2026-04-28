@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     display_name: Optional[str] = None
     is_admin: bool = False
     can_edit_user_listing: bool = False
+    can_view_quality: bool = False
     allowed_gl_codes: List[str] = []
     allowed_branches: List[str] = []
     allowed_departments: List[str] = []
@@ -18,6 +19,7 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None
     is_active: Optional[bool] = None
     can_edit_user_listing: Optional[bool] = None
+    can_view_quality: Optional[bool] = None
     allowed_gl_codes: Optional[List[str]] = None
     allowed_branches: Optional[List[str]] = None
     allowed_departments: Optional[List[str]] = None
@@ -30,6 +32,7 @@ class UserResponse(BaseModel):
     is_admin: bool
     is_active: bool
     can_edit_user_listing: bool
+    can_view_quality: bool = False
     allowed_gl_codes: List[str] = []
     allowed_branches: List[str] = []
     allowed_departments: List[str] = []
