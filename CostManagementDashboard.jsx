@@ -507,11 +507,7 @@ export default function TechnologyShowbackDashboard() {
     .filter(r => _isShowbackRow(r) && _coverageDepts.some(d => (r[d.key] || 0) !== 0))
     .reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
   const cmdPendingUserList = filtered
-    .filter(r =>
-      _isShowbackRow(r) &&
-      (r.comments || '').includes('User Based Listing') &&
-      DEPTS.every(d => (r[d.key] || 0) === 0)
-    )
+    .filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key] || 0) === 0))
     .reduce((s, r) => s + r.actuals, 0);
   const cmdNotShownBack = filtered
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
@@ -773,16 +769,16 @@ export default function TechnologyShowbackDashboard() {
               pillBg:    'rgba(255,255,255,.1)',
               sub:    `${filtered.filter(r => (r.showbackType||'').toLowerCase().startsWith('showback') && _coverageDepts.some(d=>(r[d.key]||0)!==0)).length} of ${filtered.length} items`,
               pendingAmt:  cmdPendingUserList,
-              pendingRows: filtered.filter(r => _isShowbackRow(r) && (r.comments||'').includes('User Based Listing') && DEPTS.every(d => (r[d.key]||0) === 0)),
+              pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
             },
             ...(showNotShownBackPanel ? [{
               label:     'Not Shown Back · Breakdown',
               breakdown: [
-                { label: 'No Showback',          amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                { label: "Technology's Portion", amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
-                { label: 'Not Configured',       amount: cmdNotConfigured,  color: '#FFD54F',               note: 'Needs decision', section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+                { label: 'No Showback',          amount: cmdNoShowback,      color: 'rgba(255,255,255,.85)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+                { label: "Technology's Portion", amount: cmdNoShowbackTech,  color: 'rgba(255,255,255,.85)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
+                { label: 'Not Configured',       amount: cmdNotConfigured,   color: '#FFD54F',               note: 'Needs decision', section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+                { label: 'Needs User Listing',   amount: cmdPendingUserList, color: '#FFB300',               note: 'Missing data',   section: 'Not Shown Back', rows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)) },
               ],
-              pendingUBL: cmdPendingUserList,
             }] : []),
           ].map((c, i) => (
             <div key={i} style={{
@@ -1572,7 +1568,7 @@ export default function TechnologyShowbackDashboard() {
                       { label: 'No Showback',          amount: cmdNoShowback,        note: 'Intentional',    rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
                       { label: "Technology's Portion",  amount: cmdNoShowbackTech,    note: 'Tech-specific',  rows: filtered.filter(r => (r.currentCostModel||'').toLowerCase().includes('direct allocation to technology') && (r.allocation||'').trim().toLowerCase() === 'technology') },
                       { label: 'Not Configured',        amount: cmdNotConfigured,     note: 'Needs decision', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
-                      { label: 'Needs User Listing',    amount: cmdPendingUserList,   note: 'Pending data',   rows: filtered.filter(r => _isShowbackRow(r) && (r.comments||'').includes('User Based Listing') && DEPTS.every(d => (r[d.key]||0) === 0)) },
+                      { label: 'Needs User Listing',    amount: cmdPendingUserList,   note: 'Missing data',   rows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)) },
                     ].map((row, j) => (
                       <div key={j} style={{ flex: 1, borderRight: j < 3 ? '1px solid #F2F2F2' : 'none', paddingRight: j < 3 ? 10 : 0, paddingLeft: j > 0 ? 10 : 0 }}>
                         <div style={{ fontSize: 11, color: '#A0A8B4', marginBottom: 3, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' }}>{row.label}</div>
