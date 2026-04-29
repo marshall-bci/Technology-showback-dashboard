@@ -179,6 +179,8 @@ export default function TechnologyShowbackDashboard() {
   const [coverageTargetInput, setCoverageTargetInput] = useState('');
   const [adminUserList,   setAdminUserList]   = useState([]);
   const [adminTab,        setAdminTab]        = useState('users');
+  const [shareConfigs,    setShareConfigs]    = useState([]);
+  const [shareStatus,     setShareStatus]     = useState({});  // id → 'sending'|'ok'|'err:msg'
   // Search + column filters for each table
   const [cmSearch,        setCmSearch]        = useState('');
   const [cmColFilter,     setCmColFilter]     = useState({});
@@ -347,6 +349,11 @@ export default function TechnologyShowbackDashboard() {
     if (res.ok) setAdminUserList(await res.json());
   }, []);
 
+  const loadShareConfigs = useCallback(async () => {
+    const res = await fetch(`${API_URL}/admin/share`, { credentials: 'include' });
+    if (res.ok) setShareConfigs(await res.json());
+  }, []);
+
   useEffect(() => {
     if (!user?.is_admin || activeTab !== 'admin') return;
     loadAdminUsers();
@@ -365,6 +372,7 @@ export default function TechnologyShowbackDashboard() {
     if (adminTab === 'costmodel') { loadAdminCostModel(); if (!adminHeadcount.length) loadAdminHeadcount(); }
     if (adminTab === 'headcount') loadAdminHeadcount();
     if (adminTab === 'userlisting') loadAdminUserList();
+    if (adminTab === 'share') loadShareConfigs();
   }, [user, activeTab, adminTab, loadAdminCostModel, loadAdminHeadcount, loadAdminUserList]);
 
   useEffect(() => {
@@ -2061,7 +2069,7 @@ export default function TechnologyShowbackDashboard() {
 
             {/* Sub-tabs */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-              {[['users','Users'],['logs','Usage Logs'],['costmodel','Cost Model'],['headcount','Headcount'],['userlisting','User Listing']].map(([id, label]) => (
+              {[['users','Users'],['logs','Usage Logs'],['costmodel','Cost Model'],['headcount','Headcount'],['userlisting','User Listing'],['share','Share']].map(([id, label]) => (
                 <button key={id} onClick={() => setAdminTab(id)} style={{
                   padding: '8px 20px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500,
                   background: adminTab === id ? NAVY : 'white',
@@ -2844,6 +2852,165 @@ export default function TechnologyShowbackDashboard() {
                 )}
               </div>
             )}
+
+            {/* ── Share sub-tab ──────────────────────────────────────────── */}
+            {adminTab === 'share' && (() => {
+              const DEPT_OPTIONS = DEPTS.map(d => ({ key: d.key, label: d.label }));
+              const SCHED_OPTIONS = [
+                { value: 'manual',    label: 'Manual' },
+                { value: 'monthly',   label: 'Monthly' },
+                { value: 'quarterly', label: 'Quarterly' },
+              ];
+
+              const updateCfg = async (id, patch) => {
+                const res = await fetch(`${API_URL}/admin/share/${id}`, {
+                  method: 'PUT', credentials: 'include',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(patch),
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setShareConfigs(prev => prev.map(c => c.id === id ? updated : c));
+                }
+              };
+
+              const addRow = async () => {
+                const res = await fetch(`${API_URL}/admin/share`, {
+                  method: 'POST', credentials: 'include',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ department: 'finance', emails: [], schedule: 'manual', period: 'actuals' }),
+                });
+                if (res.ok) { const cfg = await res.json(); setShareConfigs(prev => [...prev, cfg]); }
+              };
+
+              const deleteRow = async (id) => {
+                await fetch(`${API_URL}/admin/share/${id}`, { method: 'DELETE', credentials: 'include' });
+                setShareConfigs(prev => prev.filter(c => c.id !== id));
+              };
+
+              const sendNow = async (id) => {
+                setShareStatus(s => ({ ...s, [id]: 'sending' }));
+                const res = await fetch(`${API_URL}/admin/share/${id}/send`, {
+                  method: 'POST', credentials: 'include',
+                });
+                if (res.ok) {
+                  const d = await res.json();
+                  setShareStatus(s => ({ ...s, [id]: `ok:${d.recipients}` }));
+                } else {
+                  const e = await res.json().catch(() => ({}));
+                  setShareStatus(s => ({ ...s, [id]: `err:${e.detail || res.status}` }));
+                }
+                setTimeout(() => setShareStatus(s => { const n = {...s}; delete n[id]; return n; }), 5000);
+              };
+
+              const downloadPdf = async (id, dept) => {
+                const res = await fetch(`${API_URL}/admin/share/${id}/pdf`, { credentials: 'include' });
+                if (!res.ok) return;
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `showback_${dept}.pdf`; a.click();
+                URL.revokeObjectURL(url);
+              };
+
+              const inputStyle = { border: '1px solid #D0D0D0', borderRadius: 4, padding: '4px 8px', fontSize: 12, width: '100%', boxSizing: 'border-box' };
+              const selectStyle = { ...inputStyle, background: 'white' };
+
+              return (
+                <div style={card({ overflow: 'hidden' })}>
+                  <div style={{ padding: '14px 20px', borderBottom: '1px solid #EEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Share Reports</span>
+                    <button onClick={addRow}
+                      style={{ background: NAVY, border: 'none', color: 'white', borderRadius: 4, padding: '5px 14px', cursor: 'pointer', fontSize: 12 }}>
+                      + Add Row
+                    </button>
+                  </div>
+                  {shareConfigs.length === 0 ? (
+                    <div style={{ padding: 32, textAlign: 'center', color: '#696F79', fontSize: 13 }}>
+                      No share configs yet. Click <strong>+ Add Row</strong> to create one.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: NAVY, color: 'white' }}>
+                            {['Department', 'Emails (space or . separated)', 'Period', 'Schedule', 'Last Sent', 'Actions'].map(h => (
+                              <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {shareConfigs.map((cfg, ri) => {
+                            const status = shareStatus[cfg.id];
+                            return (
+                              <tr key={cfg.id} style={{ background: ri % 2 === 0 ? 'white' : '#F8F9FA', borderBottom: '1px solid #EEE' }}>
+                                <td style={{ padding: '8px 10px', verticalAlign: 'top' }}>
+                                  <select value={cfg.department} onChange={e => updateCfg(cfg.id, { department: e.target.value })} style={{ ...selectStyle, width: 130 }}>
+                                    {DEPT_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                                  </select>
+                                </td>
+                                <td style={{ padding: '8px 10px', verticalAlign: 'top', minWidth: 260 }}>
+                                  <textarea
+                                    defaultValue={(cfg.emails || []).join(' ')}
+                                    placeholder="email@bci.ca  email2@bci.ca"
+                                    rows={2}
+                                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 11 }}
+                                    onBlur={e => {
+                                      const emails = e.target.value.split(/[\s.,;]+/).map(s => s.trim().toLowerCase()).filter(s => s.includes('@'));
+                                      updateCfg(cfg.id, { emails });
+                                    }}
+                                  />
+                                </td>
+                                <td style={{ padding: '8px 10px', verticalAlign: 'top' }}>
+                                  <select value={cfg.period} onChange={e => updateCfg(cfg.id, { period: e.target.value })} style={{ ...selectStyle, width: 140 }}>
+                                    {dynamicPeriods.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                                  </select>
+                                </td>
+                                <td style={{ padding: '8px 10px', verticalAlign: 'top' }}>
+                                  <select value={cfg.schedule} onChange={e => updateCfg(cfg.id, { schedule: e.target.value })} style={{ ...selectStyle, width: 110 }}>
+                                    {SCHED_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                  </select>
+                                  {cfg.nextRun && (
+                                    <div style={{ fontSize: 10, color: '#696F79', marginTop: 2 }}>Next: {new Date(cfg.nextRun).toLocaleDateString()}</div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '8px 10px', verticalAlign: 'top', whiteSpace: 'nowrap', color: '#696F79' }}>
+                                  {cfg.lastSent ? new Date(cfg.lastSent).toLocaleDateString() : 'Never'}
+                                </td>
+                                <td style={{ padding: '8px 10px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <button title="Download PDF preview" onClick={() => downloadPdf(cfg.id, cfg.department)}
+                                      style={{ background: 'none', border: `1px solid ${NAVY}`, color: NAVY, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}>
+                                      ⬇ PDF
+                                    </button>
+                                    <button title="Send email now" onClick={() => sendNow(cfg.id)} disabled={status === 'sending'}
+                                      style={{ background: CYAN, border: 'none', color: 'white', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 12, opacity: status === 'sending' ? 0.6 : 1 }}>
+                                      {status === 'sending' ? '…' : '✉ Send'}
+                                    </button>
+                                    <button title="Delete row" onClick={() => deleteRow(cfg.id)}
+                                      style={{ background: 'none', border: '1px solid #EF9A9A', color: '#C62828', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}>
+                                      🗑
+                                    </button>
+                                  </div>
+                                  {status && status !== 'sending' && (
+                                    <div style={{ fontSize: 11, marginTop: 4, color: status.startsWith('ok') ? '#388E3C' : '#C62828' }}>
+                                      {status.startsWith('ok') ? `✓ Sent to ${status.split(':')[1]} recipient(s)` : `✗ ${status.slice(4)}`}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div style={{ padding: '10px 16px', borderTop: '1px solid #EEE', fontSize: 11, color: '#696F79' }}>
+                    Emails sent via Microsoft 365 SMTP. Configure SMTP_USER, SMTP_PASSWORD, SMTP_FROM in the server .env file.
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
         )}
 

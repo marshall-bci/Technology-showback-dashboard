@@ -111,6 +111,18 @@ class AppSetting(Base):
     value = Column(String, nullable=False)
 
 
+class ShareConfig(Base):
+    __tablename__ = "share_configs"
+    id          = Column(Integer, primary_key=True)
+    department  = Column(String, nullable=False)
+    emails      = Column(JSON, default=list)
+    schedule    = Column(String, default='manual')   # 'manual'|'monthly'|'quarterly'
+    period      = Column(String, default='actuals')  # OC period key
+    last_sent   = Column(DateTime, nullable=True)
+    next_run    = Column(DateTime, nullable=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

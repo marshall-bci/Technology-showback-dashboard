@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
 from auth import router as auth_router, get_current_user, require_admin
-from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry, AppSetting
+from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry, AppSetting, ShareConfig
 from models import UserCreate, UserUpdate, UserResponse, LogEntry
 from permissions import filter_for_user
 from parser import parse_workbook
@@ -51,6 +51,13 @@ with engine.connect() as _c:
         _c.commit()
     except Exception:
         _c.rollback()
+    # share_configs table (create if missing — idempotent via metadata)
+    try:
+        _c.execute(_sql_text("SELECT id FROM share_configs LIMIT 1"))
+    except Exception:
+        _c.rollback()
+        Base.metadata.tables['share_configs'].create(bind=engine)
+        _c.commit()
 
 # ── Production safety checks ──────────────────────────────────────────────────
 if os.getenv("APP_ENV") == "production":
@@ -81,6 +88,67 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+# ── Scheduled share sends ─────────────────────────────────────────────────────
+from apscheduler.schedulers.background import BackgroundScheduler as _BGScheduler
+
+_scheduler = _BGScheduler()
+
+
+def _check_scheduled_sends():
+    from database import SessionLocal
+    from reporter import generate_dept_pdf
+    from emailer import send_report
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        configs = db.query(ShareConfig).filter(
+            ShareConfig.schedule != 'manual',
+            ShareConfig.next_run <= now,
+            ShareConfig.emails != None,
+        ).all()
+        for cfg in configs:
+            if not cfg.emails:
+                continue
+            try:
+                data = _load_data()
+                pdf  = generate_dept_pdf(data.get("rows", []), cfg.department, cfg.period)
+                _DLABELS = {'ceo':'CEO','legal':'Legal','hr':'HR','audit':'Audit',
+                            'cdo':'CD&O','corpOps':'Corp Ops','finance':'Finance',
+                            'technology':'Technology','io':'IO','irr':'IRR',
+                            'pe':'PE','cmci':'CM&CI','isr':'ISR'}
+                dept_label = _DLABELS.get(cfg.department, cfg.department.title())
+                send_report(cfg.emails, dept_label, cfg.period, pdf)
+                cfg.last_sent = now
+                cfg.next_run  = _next_run(cfg.schedule, now)
+                db.commit()
+            except Exception as e:
+                print(f"[share scheduler] failed for cfg {cfg.id}: {e}")
+    finally:
+        db.close()
+
+
+def _next_run(schedule: str, from_dt=None):
+    from datetime import timedelta
+    base = from_dt or datetime.utcnow()
+    if schedule == 'monthly':
+        # advance by ~30 days
+        return base.replace(day=1) if False else base + timedelta(days=30)
+    if schedule == 'quarterly':
+        return base + timedelta(days=91)
+    return None
+
+
+@app.on_event("startup")
+def _start_scheduler():
+    _scheduler.add_job(_check_scheduled_sends, 'interval', hours=1, id='share_scheduler',
+                       replace_existing=True)
+    _scheduler.start()
+
+
+@app.on_event("shutdown")
+def _stop_scheduler():
+    _scheduler.shutdown(wait=False)
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
@@ -520,6 +588,129 @@ async def recalculate(request: Request, current_user: User = Depends(require_adm
     log_access(db, current_user.email, "recalculate", f"{len(rows)} rows",
                request.client.host if request.client else "")
     return {"ok": True, "rowCount": len(rows)}
+
+
+# ── Share configs ────────────────────────────────────────────────────────────
+_DEPT_LABELS = {
+    'ceo': 'CEO', 'legal': 'Legal', 'hr': 'HR', 'audit': 'Audit',
+    'cdo': 'CD&O', 'corpOps': 'Corp Ops', 'finance': 'Finance',
+    'technology': 'Technology', 'io': 'IO', 'irr': 'IRR',
+    'pe': 'PE', 'cmci': 'CM&CI', 'isr': 'ISR',
+}
+
+
+def _share_dict(c: ShareConfig) -> dict:
+    return {
+        "id":         c.id,
+        "department": c.department,
+        "emails":     c.emails or [],
+        "schedule":   c.schedule,
+        "period":     c.period,
+        "lastSent":   c.last_sent.isoformat() if c.last_sent else None,
+        "nextRun":    c.next_run.isoformat()  if c.next_run  else None,
+    }
+
+
+@app.get("/admin/share")
+async def list_share_configs(current_user: User = Depends(require_admin),
+                              db: Session = Depends(get_db)):
+    return [_share_dict(c) for c in db.query(ShareConfig).order_by(ShareConfig.id).all()]
+
+
+@app.post("/admin/share", status_code=201)
+async def create_share_config(body: dict,
+                               current_user: User = Depends(require_admin),
+                               db: Session = Depends(get_db)):
+    cfg = ShareConfig(
+        department = str(body.get("department", "finance")),
+        emails     = body.get("emails", []),
+        schedule   = str(body.get("schedule", "manual")),
+        period     = str(body.get("period", "actuals")),
+    )
+    db.add(cfg); db.commit(); db.refresh(cfg)
+    return _share_dict(cfg)
+
+
+@app.put("/admin/share/{cfg_id}")
+async def update_share_config(cfg_id: int, body: dict,
+                               current_user: User = Depends(require_admin),
+                               db: Session = Depends(get_db)):
+    cfg = db.query(ShareConfig).filter(ShareConfig.id == cfg_id).first()
+    if not cfg:
+        raise HTTPException(404, "Share config not found")
+    if "department" in body: cfg.department = str(body["department"])
+    if "emails"     in body: cfg.emails     = body["emails"]
+    if "schedule"   in body: cfg.schedule   = str(body["schedule"])
+    if "period"     in body: cfg.period     = str(body["period"])
+    # Recompute next_run when schedule changes
+    if "schedule" in body and body["schedule"] != "manual":
+        cfg.next_run = _next_run(body["schedule"])
+    elif "schedule" in body and body["schedule"] == "manual":
+        cfg.next_run = None
+    db.commit()
+    return _share_dict(cfg)
+
+
+@app.delete("/admin/share/{cfg_id}", status_code=204)
+async def delete_share_config(cfg_id: int,
+                               current_user: User = Depends(require_admin),
+                               db: Session = Depends(get_db)):
+    cfg = db.query(ShareConfig).filter(ShareConfig.id == cfg_id).first()
+    if not cfg:
+        raise HTTPException(404, "Share config not found")
+    db.delete(cfg); db.commit()
+
+
+@app.get("/admin/share/{cfg_id}/pdf")
+async def preview_share_pdf(cfg_id: int,
+                             current_user: User = Depends(require_admin),
+                             db: Session = Depends(get_db)):
+    from reporter import generate_dept_pdf
+    from fastapi.responses import StreamingResponse
+    import io
+    cfg = db.query(ShareConfig).filter(ShareConfig.id == cfg_id).first()
+    if not cfg:
+        raise HTTPException(404, "Share config not found")
+    data = _load_data()
+    pdf  = generate_dept_pdf(data.get("rows", []), cfg.department, cfg.period)
+    dept_label = _DEPT_LABELS.get(cfg.department, cfg.department.title())
+    filename   = f"showback_{dept_label.lower().replace(' ', '_')}_{cfg.period}.pdf"
+    return StreamingResponse(io.BytesIO(pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
+@app.post("/admin/share/{cfg_id}/send")
+async def send_share_now(cfg_id: int, request: Request,
+                          current_user: User = Depends(require_admin),
+                          db: Session = Depends(get_db)):
+    from reporter import generate_dept_pdf
+    from emailer import send_report
+    cfg = db.query(ShareConfig).filter(ShareConfig.id == cfg_id).first()
+    if not cfg:
+        raise HTTPException(404, "Share config not found")
+    if not cfg.emails:
+        raise HTTPException(400, "No email addresses configured")
+    data = _load_data()
+    if not data.get("rows"):
+        raise HTTPException(400, "No cost data loaded — upload a workbook first")
+    try:
+        pdf = generate_dept_pdf(data["rows"], cfg.department, cfg.period)
+        dept_label = _DEPT_LABELS.get(cfg.department, cfg.department.title())
+        send_report(cfg.emails, dept_label, cfg.period, pdf)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Send failed: {e}")
+    now = datetime.utcnow()
+    cfg.last_sent = now
+    if cfg.schedule != "manual":
+        cfg.next_run = _next_run(cfg.schedule, now)
+    db.commit()
+    log_access(db, current_user.email, "share_send",
+               f"{cfg.department} → {len(cfg.emails)} recipients",
+               request.client.host if request.client else "")
+    return {"ok": True, "recipients": len(cfg.emails)}
 
 
 # ── Debug: show CM index entry for a given pid ────────────────────────────────
