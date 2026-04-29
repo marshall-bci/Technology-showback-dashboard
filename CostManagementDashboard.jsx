@@ -115,6 +115,16 @@ const cadShort = (v) => {
   return `$${(v / 1_000).toFixed(0)}k`;
 };
 
+const exportToExcel = async (endpoint, filename) => {
+  const res = await fetch(endpoint, { credentials: 'include' });
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 // ─── Tooltip / card styles ────────────────────────────────────────────────────
 const TT   = { fontFamily: "'Open Sans', Calibri, sans-serif", fontSize: 12 };
 const card = (extra = {}) => ({
@@ -207,7 +217,7 @@ export default function TechnologyShowbackDashboard() {
   const [recalcing,       setRecalcing]       = useState(false);
   const [heroModal,       setHeroModal]       = useState(null);
   const [sbHoverCat,      setSbHoverCat]      = useState(null);
-  const [recalcHcYear,    setRecalcHcYear]    = useState('fy2026');
+  const [recalcBaseYear,  setRecalcBaseYear]  = useState(() => parseInt(localStorage.getItem('hcBaseYear')) || 2026);
   const [hcYearTypes,     setHcYearTypes]     = useState(() => {
     try { return JSON.parse(localStorage.getItem('hcYearTypes')) || {}; } catch { return {}; }
   });
@@ -439,13 +449,12 @@ export default function TechnologyShowbackDashboard() {
     if (filterDept !== 'All' && !r[filterDept]) return false;
     return true;
   });
-  // When a non-actuals period is selected, scale dept allocation columns proportionally
-  // so that all dept-level breakdowns reflect the selected period's amounts.
+  // When a non-actuals period is selected, use the pre-computed per-period dept columns
+  // stored by the backend (e.g. ceo_budget, ceo_forecast1, ceo_forecast2).
   const filtered = period === 'actuals' ? filteredRaw : filteredRaw.map(r => {
-    const scale = r.actuals > 0 ? (r[period] || 0) / r.actuals : 0;
-    const scaled = { ...r };
-    DEPTS.forEach(d => { scaled[d.key] = (r[d.key] || 0) * scale; });
-    return scaled;
+    const mapped = { ...r };
+    DEPTS.forEach(d => { mapped[d.key] = r[`${d.key}_${period}`] ?? 0; });
+    return mapped;
   });
 
   // ── Derived data ────────────────────────────────────────────────────────────
@@ -770,10 +779,10 @@ export default function TechnologyShowbackDashboard() {
               label:  'Total Spend · ' + periodLabel,
               value:  cadShort(totalPeriod),
               valueColor: 'white',
-              pill:   `▼ ${cadShort(cmdVariance)} under budget`,
+              pill:   period === 'actuals' ? `▼ ${cadShort(cmdVariance)} under budget` : null,
               pillColor: cmdVariance >= 0 ? '#69F0AE' : '#EF9A9A',
               pillBg:    cmdVariance >= 0 ? 'rgba(105,240,174,.15)' : 'rgba(239,154,154,.15)',
-              sub:    `vs ${cadShort(totalBudget)} budget`,
+              sub:    period === 'actuals' ? `vs ${cadShort(totalBudget)} budget` : null,
             },
             {
               label:  'Showback Coverage',
@@ -825,10 +834,12 @@ export default function TechnologyShowbackDashboard() {
                     {c.value}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>
-                      {c.pill}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>{c.sub}</span>
+                    {c.pill != null && (
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>
+                        {c.pill}
+                      </span>
+                    )}
+                    {c.sub != null && <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>{c.sub}</span>}
                     {c.pendingAmt > 0 && (
                       <span
                         onClick={() => setHeroModal({ section: 'Showback Coverage', title: 'Pending User Listing', note: 'Pending data', rows: c.pendingRows, total: c.pendingAmt })}
@@ -939,7 +950,7 @@ export default function TechnologyShowbackDashboard() {
               name: 'Headcount-Based Showback',
               badge: 'Primary model',
               color: NAVY,
-              meta: 'Shared across all 12 LOBs proportional to FY2026 headcount',
+              meta: `Shared across all 12 LOBs proportional to FY${{ actuals: baseYear, budget: baseYear, forecast1: baseYear + 1, forecast2: baseYear + 2 }[period] ?? baseYear} headcount`,
               rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('headcount') && DEPTS.some(d => (r[d.key] || 0) !== 0)),
             },
             {
@@ -1160,17 +1171,19 @@ export default function TechnologyShowbackDashboard() {
               const thresholdColor = belowThresholdRows.length > 0 ? '#FF9800' : '#43A047';
               const kpiCards = [
                 {
-                  name: 'Total Actuals',
-                  badge: periodLabel,
+                  name: periodLabel,
+                  badge: 'Total Spend',
                   color: CYAN,
                   amount: cadShort(_deptTotal),
                   rawTotal: _deptTotal,
                   rows: filtered,
                   rowAmt: _deptRowAmt || undefined,
-                  subLine: `${totalBudget > 0 ? (_deptTotal / totalBudget * 100).toFixed(1) : '—'}% of budget · ${filtered.length} line items`,
-                  barPct: totalBudget > 0 ? Math.min(_deptTotal / totalBudget * 100, 100) : 0,
-                  meta: `Budget: ${cadShort(totalBudget)}`,
-                  pctLabel: `${totalBudget > 0 ? (_deptTotal / totalBudget * 100).toFixed(1) : '—'}%`,
+                  subLine: period === 'actuals' && totalBudget > 0
+                    ? `${(_deptTotal / totalBudget * 100).toFixed(1)}% of budget · ${filtered.length} line items`
+                    : `${filtered.length} line items`,
+                  barPct: period === 'actuals' && totalBudget > 0 ? Math.min(_deptTotal / totalBudget * 100, 100) : 100,
+                  meta: period === 'actuals' ? `Budget: ${cadShort(totalBudget)}` : `Actuals: ${cadShort(totalActuals)}`,
+                  pctLabel: period === 'actuals' && totalBudget > 0 ? `${(_deptTotal / totalBudget * 100).toFixed(1)}%` : '—',
                 },
                 {
                   name: 'Technology Share',
@@ -1960,13 +1973,11 @@ export default function TechnologyShowbackDashboard() {
             {/* Recalculate button */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-                <label style={{ fontSize: 13, color: '#515254', whiteSpace: 'nowrap' }}>Headcount year:</label>
-                <select value={recalcHcYear} onChange={e => setRecalcHcYear(e.target.value)}
+                <label style={{ fontSize: 13, color: '#515254', whiteSpace: 'nowrap' }}>Base fiscal year:</label>
+                <select value={recalcBaseYear} onChange={e => setRecalcBaseYear(Number(e.target.value))}
                   style={{ border: '1px solid #D0D0D0', borderRadius: 4, padding: '5px 10px', fontSize: 13, flex: 1 }}>
-                  {['fy2026','fy2027','fy2028'].map((yr, idx) => (
-                    <option key={yr} value={yr}>
-                      FY{baseYear + idx} — {hcYearTypes[yr] || 'Actual'}
-                    </option>
+                  {[baseYear, baseYear + 1, baseYear + 2].map(yr => (
+                    <option key={yr} value={yr}>FY{yr}</option>
                   ))}
                 </select>
               </div>
@@ -1978,7 +1989,7 @@ export default function TechnologyShowbackDashboard() {
                     const res = await fetch(`${API_URL}/api/recalculate`, {
                       method: 'POST', credentials: 'include',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ period: 'actuals', headcountYear: recalcHcYear }),
+                      body: JSON.stringify({ baseYear: recalcBaseYear }),
                     });
                     if (res.ok) {
                       const d = await res.json();
@@ -2285,6 +2296,8 @@ export default function TechnologyShowbackDashboard() {
                       style={{ border: `1px solid ${CYAN}`, borderRadius: 4, padding: '4px 10px', fontSize: 11, width: 200, outline: 'none' }} />
                     <button onClick={() => { setCmSearch(''); setCmColFilter({}); loadAdminCostModel(); }}
                       style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                    <button onClick={() => exportToExcel(`${API_URL}/admin/cost-model/export`, 'cost_model.xlsx')}
+                      style={{ background: NAVY, border: 'none', color: 'white', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>⬇ Download</button>
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -2746,6 +2759,8 @@ export default function TechnologyShowbackDashboard() {
                       style={{ border: `1px solid ${CYAN}`, borderRadius: 4, padding: '4px 10px', fontSize: 11, width: 200, outline: 'none' }} />
                     <button onClick={() => { setUlSearch(''); setUlColFilter({}); loadAdminUserList(); }}
                       style={{ background: 'none', border: `1px solid ${CYAN}`, color: CYAN, borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>↻ Refresh</button>
+                    <button onClick={() => exportToExcel(`${API_URL}/admin/user-listing/export`, 'user_listing.xlsx')}
+                      style={{ background: NAVY, border: 'none', color: 'white', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}>⬇ Download</button>
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>

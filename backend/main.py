@@ -132,10 +132,10 @@ def _migrate_cdo_split():
     if not rows or 'cdoCorpOps' not in rows[0]:
         return
     from database import SessionLocal
-    from allocator import run_allocation
+    from allocator import run_allocation_all_periods
     db = SessionLocal()
     try:
-        new_rows = run_allocation(db)
+        new_rows = run_allocation_all_periods(db)
         if new_rows:
             _save_data(new_rows, data.get("sheetName") or "Cost Data")
     finally:
@@ -301,8 +301,8 @@ async def update_cost_model(entry_id: int, body: dict,
             setattr(entry, db_attr, body[js_key])
     db.commit()
     # Re-run allocation so Cost Management tab reflects the updated Cost Model immediately.
-    from allocator import run_allocation
-    rows = run_allocation(db)
+    from allocator import run_allocation_all_periods
+    rows = run_allocation_all_periods(db)
     if rows:
         existing = _load_data()
         _save_data(rows, existing.get("sheetName", "OC Data Refresh"))
@@ -352,8 +352,8 @@ async def update_headcount(entry_id: int, body: dict,
             except (ValueError, TypeError):
                 raise HTTPException(400, f"{yr} must be a number")
     db.commit()
-    from allocator import run_allocation
-    rows = run_allocation(db)
+    from allocator import run_allocation_all_periods
+    rows = run_allocation_all_periods(db)
     if rows:
         existing = _load_data()
         _save_data(rows, existing.get("sheetName", "OC Data Refresh"))
@@ -422,27 +422,97 @@ async def update_user_listing(entry_id: int, body: dict,
             except (ValueError, TypeError):
                 pass
     db.commit()
-    from allocator import run_allocation
-    rows = run_allocation(db)
+    from allocator import run_allocation_all_periods
+    rows = run_allocation_all_periods(db)
     if rows:
         existing = _load_data()
         _save_data(rows, existing.get("sheetName", "OC Data Refresh"))
     return {"ok": True}
 
 
+# ── Excel exports ────────────────────────────────────────────────────────────
+@app.get("/admin/cost-model/export")
+async def export_cost_model(current_user: User = Depends(require_admin),
+                             db: Session = Depends(get_db)):
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font
+    from openpyxl.utils import get_column_letter
+    from fastapi.responses import StreamingResponse
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Cost Model"
+    headers = ['Branch Name', 'GL Code', 'Branch Code', 'PID', 'GL Category',
+               'Cost Model Category', 'Description', 'Required', 'Current Cost Model',
+               'Allocation', 'Future Cost Model', 'Showback Type', 'User Listing Flag']
+    fill = PatternFill(start_color="00365B", end_color="00365B", fill_type="solid")
+    font = Font(color="FFFFFF", bold=True)
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill = fill
+        cell.font = font
+    for e in db.query(CostModelEntry).all():
+        ws.append([e.branch_name, e.gl_code, e.branch_code, e.pid, e.gl_category,
+                   e.cost_model_category, e.description, e.required, e.current_cost_model,
+                   e.allocation, e.future_cost_model, e.showback_type, e.user_listing_flag])
+    for col in ws.columns:
+        ws.column_dimensions[get_column_letter(col[0].column)].width = min(
+            max(len(str(c.value or '')) for c in col) + 2, 50)
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    return StreamingResponse(buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=cost_model.xlsx"})
+
+
+@app.get("/admin/user-listing/export")
+async def export_user_listing(current_user: User = Depends(require_admin),
+                               db: Session = Depends(get_db)):
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font
+    from openpyxl.utils import get_column_letter
+    from fastapi.responses import StreamingResponse
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "User Listing"
+    headers = ['Branch Name', 'Branch Code', 'GL Code', 'PID', 'Description',
+               'CEO', 'Legal', 'Corp Ops', 'HR', 'Audit', 'CD&O',
+               'Finance', 'Technology', 'IO', 'IRR', 'PE', 'CM&CI', 'ISR']
+    fill = PatternFill(start_color="00365B", end_color="00365B", fill_type="solid")
+    font = Font(color="FFFFFF", bold=True)
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill = fill
+        cell.font = font
+    for e in db.query(UserListingEntry).order_by(UserListingEntry.pid).all():
+        ws.append([e.branch_name, e.branch_code, e.gl_code, e.pid, e.description,
+                   e.ceo, e.legal, e.corp_ops, e.hr, e.audit, e.cdo,
+                   e.finance, e.technology, e.io, e.irr, e.pe, e.cmci, e.isr])
+    for col in ws.columns:
+        ws.column_dimensions[get_column_letter(col[0].column)].width = min(
+            max(len(str(c.value or '')) for c in col) + 2, 50)
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    return StreamingResponse(buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=user_listing.xlsx"})
+
+
 # ── Recalculate ───────────────────────────────────────────────────────────────
 @app.post("/api/recalculate")
 async def recalculate(request: Request, current_user: User = Depends(require_admin),
                       db: Session = Depends(get_db)):
-    from allocator import run_allocation
+    from allocator import run_allocation_all_periods
     body = {}
     try:
         body = await request.json()
     except Exception:
         pass
-    period   = body.get("period", "actuals")
-    hc_year  = body.get("headcountYear", "fy2026")
-    rows = run_allocation(db, period=period, hc_year=hc_year)
+    base_year = int(body.get("baseYear", 2026))
+    rows = run_allocation_all_periods(db, base_year=base_year)
     if not rows:
         raise HTTPException(400, "No OC data in database — upload a workbook first")
     payload = _load_data()

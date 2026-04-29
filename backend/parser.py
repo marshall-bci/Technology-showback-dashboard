@@ -1,4 +1,5 @@
 import io
+import re
 from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 from database import CostModelEntry, HeadcountEntry, UserListingEntry, OcRawRow
@@ -25,6 +26,8 @@ def parse_workbook(file_bytes: bytes, db: Session, update_refs: bool = False) ->
         return _parse_management_tab_fallback(wb)
 
     spread_year = str(oc_ws['J1'].value or '').strip()
+    m = re.search(r'\d{4}', spread_year)
+    base_year = int(m.group()) if m else 2026
 
     cm_ws = next((wb[n] for n in wb.sheetnames if n.lower() == 'cost model'), None)
     hc_ws = next((wb[n] for n in wb.sheetnames if n.lower() == 'headcount'), None)
@@ -44,8 +47,8 @@ def parse_workbook(file_bytes: bytes, db: Session, update_refs: bool = False) ->
     _load_oc_data(oc_ws, db)
     wb.close()
 
-    from allocator import run_allocation
-    rows = run_allocation(db)
+    from allocator import run_allocation_all_periods
+    rows = run_allocation_all_periods(db, base_year=base_year)
     return {"rows": rows, "rowCount": len(rows), "sheetName": "OC Data Refresh",
             "refs_empty": refs_empty}
 

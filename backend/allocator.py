@@ -359,3 +359,37 @@ def run_allocation(db, period: str = 'actuals', hc_year: str = 'fy2026') -> list
         results.append(row)
 
     return results
+
+
+# ── Multi-period allocation ───────────────────────────────────────────────────
+
+def _hc_year(base_year: int, period: str) -> str:
+    """Return the headcount DB column name for the given period and base year."""
+    offset = {'actuals': 0, 'budget': 0, 'forecast1': 1, 'forecast2': 2}.get(period, 0)
+    return f'fy{min(base_year + offset, 2028)}'
+
+
+def run_allocation_all_periods(db, base_year: int = 2026) -> list[dict]:
+    """
+    Run allocation for all 4 periods using the correct headcount year for each,
+    then merge into a single list of rows.
+
+    Base row keeps unsuffixed dept keys (actuals allocation) for backward compat.
+    Extra periods stored as dept_key + '_' + period  (e.g. 'finance_forecast1').
+    """
+    periods = ['actuals', 'budget', 'forecast1', 'forecast2']
+    period_results: dict[tuple, dict] = {}
+
+    for p in periods:
+        hcy = _hc_year(base_year, p)
+        rows = run_allocation(db, period=p, hc_year=hcy)
+        for row in rows:
+            key = (row['branchCode'], row['glCode'], row['pid'])
+            if key not in period_results:
+                # First time (actuals): this becomes the base row
+                period_results[key] = row
+            if p != 'actuals':
+                for dk in OUT_KEYS:
+                    period_results[key][f'{dk}_{p}'] = row[dk]
+
+    return list(period_results.values())
