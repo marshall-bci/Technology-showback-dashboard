@@ -307,7 +307,7 @@ export default function TechnologyShowbackDashboard() {
   // ── Logout ──────────────────────────────────────────────────────────────────
   const handleLogout = () => {
     setLoggingOut(true);
-    window.location.href = `${API_URL}/auth/logout`;
+    window.location.href = `${API_URL}/auth/logout?next=${encodeURIComponent(window.location.origin)}`;
   };
 
   // ── Settings ─────────────────────────────────────────────────────────────────
@@ -734,7 +734,7 @@ export default function TechnologyShowbackDashboard() {
                 fontSize: 12, fontWeight: 600,
               }}
             >↻ Refresh</button>
-            <form method="POST" action={`${API_URL}/auth/logout`} style={{ display: 'inline' }}>
+            <form method="POST" action={`${API_URL}/auth/logout?next=${encodeURIComponent(window.location.origin)}`} style={{ display: 'inline' }}>
               <button type="submit" style={{
                 background: 'rgba(255,255,255,0.12)', color: 'white',
                 border: '1px solid rgba(255,255,255,0.25)',
