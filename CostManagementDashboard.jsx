@@ -858,10 +858,10 @@ export default function TechnologyShowbackDashboard() {
 
       {/* ── Technology Breakdown separator ─────────────────────────────────────── */}
       {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && deptTechCost?.loaded && (
-        <div style={{ background: 'linear-gradient(to bottom, #002847, #003460)', padding: '6px 28px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.2)' }} />
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,.35)' }}>Technology Breakdown</span>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.2)' }} />
+        <div style={{ background: 'linear-gradient(to bottom, #002847, #004C8C)', padding: '18px 28px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.35)' }} />
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,.7)' }}>Technology Breakdown</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.35)' }} />
         </div>
       )}
 
@@ -898,7 +898,7 @@ export default function TechnologyShowbackDashboard() {
           },
         ];
         return (
-          <div style={{ background: '#003460', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+          <div style={{ background: '#004C8C', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
             {tiles.map((c, i) => (
               <div key={i} style={{ padding: '14px 28px', borderRight: i < tiles.length - 1 ? '1px solid rgba(255,255,255,.25)' : 'none' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
