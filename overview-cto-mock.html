@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCI Technology — CTO Cost Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #00365B;
+    --cyan:   #00ABBD;
+    --orange: #DC642B;
+    --amber:  #E65100;
+    --green:  #2E7D32;
+    --red:    #C62828;
+    --slate:  #457B96;
+    --gray1:  #F2F2F2;
+    --text:   #515254;
+    --light:  #696F79;
+  }
+
+  body {
+    font-family: 'Open Sans', Calibri, sans-serif;
+    background: var(--gray1);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ──────────────────────────────────────────────────── */
+  .header {
+    background: var(--navy);
+    color: white;
+    padding: 0 40px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    min-height: 64px;
+  }
+  .header-left { display: flex; align-items: center; gap: 20px; }
+  .bci-logo { font-size: 20px; font-weight: 800; letter-spacing: 2px; opacity: .9; }
+  .header-divider { width: 1px; height: 28px; background: rgba(255,255,255,.2); }
+  .header-title { font-size: 15px; font-weight: 600; }
+  .header-sub   { font-size: 11px; opacity: .5; margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; opacity: .75; }
+  .live-dot {
+    width: 7px; height: 7px;
+    background: #69F0AE;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── Command strip ───────────────────────────────────────────── */
+  .command-strip {
+    background: #002847;
+    padding: 0 40px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .cmd-cell {
+    padding: 16px 0;
+    border-right: 1px solid rgba(255,255,255,.08);
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+  .cmd-cell:first-child { padding-left: 0; }
+  .cmd-cell:last-child  { border-right: none; }
+  .cmd-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.4);
+    margin-bottom: 6px;
+  }
+  .cmd-value {
+    font-size: 30px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .cmd-value.good  { color: #69F0AE; }
+  .cmd-value.warn  { color: #FFD54F; }
+  .cmd-value.alert { color: #EF9A9A; }
+  .cmd-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,.45);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cmd-delta {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 8px;
+  }
+  .delta-good   { background: rgba(105,240,174,.15); color: #69F0AE; }
+  .delta-warn   { background: rgba(255,213,79,.15);  color: #FFD54F; }
+  .delta-alert  { background: rgba(239,154,154,.15); color: #EF9A9A; }
+  .delta-neutral{ background: rgba(255,255,255,.1);  color: rgba(255,255,255,.5); }
+
+  /* ── Page ─────────────────────────────────────────────────────── */
+  .page { padding: 24px 40px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── Section ─────────────────────────────────────────────────── */
+  .sh { margin-bottom: 12px; }
+  .sh-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .sh-sub   { font-size: 11px; color: var(--light); margin-top: 2px; }
+
+  /* ── Cards ───────────────────────────────────────────────────── */
+  .card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+
+  /* ── Programme health row ────────────────────────────────────── */
+  .programme-row {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* Coverage gauge */
+  .coverage-card {
+    background: white;
+    border-radius: 8px;
+    padding: 22px 26px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 24px;
+    align-items: center;
+  }
+  .coverage-ring-wrap { position: relative; width: 100px; height: 100px; flex-shrink: 0; }
+  .coverage-ring {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: conic-gradient(
+      var(--cyan)  0deg calc(74.8 / 100 * 360deg),
+      #F0F0F0      calc(74.8 / 100 * 360deg) 360deg
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .coverage-ring::after {
+    content: '';
+    position: absolute;
+    inset: 14px;
+    background: white;
+    border-radius: 50%;
+  }
+  .coverage-pct {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--navy);
+    z-index: 1;
+  }
+  .coverage-label  { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  .coverage-sub    { font-size: 12px; color: var(--light); line-height: 1.6; }
+  .coverage-target {
+    margin-top: 10px;
+    font-size: 11px;
+    background: #E8F5E9;
+    color: var(--green);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-weight: 600;
+    display: inline-block;
+  }
+
+  /* Gap card */
+  .gap-card {
+    background: white;
+    border-radius: 8px;
+    padding: 22px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    border-top: 3px solid var(--amber);
+  }
+  .gap-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--amber); margin-bottom: 8px; }
+  .gap-amount  { font-size: 28px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; margin-bottom: 4px; }
+  .gap-sub     { font-size: 12px; color: var(--light); line-height: 1.5; }
+  .gap-cta     {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--amber);
+    cursor: pointer;
+  }
+
+  /* ── Budget variance bar ─────────────────────────────────────── */
+  .budget-card {
+    background: white;
+    border-radius: 8px;
+    padding: 22px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    border-top: 3px solid var(--green);
+  }
+  .bv-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+  .bv-amount  { font-size: 28px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; margin-bottom: 2px; }
+  .bv-sub     { font-size: 12px; color: var(--light); margin-bottom: 14px; }
+  .bv-track   { height: 8px; background: #F0F0F0; border-radius: 4px; overflow: hidden; position: relative; }
+  .bv-fill    { height: 100%; background: var(--cyan); border-radius: 4px; width: 78.7%; }
+  .bv-target  {
+    position: absolute;
+    top: -4px; bottom: -4px;
+    right: 0;
+    width: 2px;
+    background: #BFBFBF;
+  }
+  .bv-labels  { display: flex; justify-content: space-between; font-size: 10px; color: #BFBFBF; margin-top: 5px; }
+
+  /* ── Approach progress bars ──────────────────────────────────── */
+  .approach-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+  .approach-card {
+    background: white;
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .ap-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .ap-name   { font-size: 12px; font-weight: 700; color: var(--navy); }
+  .ap-badge  {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--ap-bg, #F0F0F0);
+    color: var(--ap-color, #888);
+  }
+  .ap-amount { font-size: 22px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; margin-bottom: 2px; }
+  .ap-sub    { font-size: 11px; color: var(--light); margin-bottom: 12px; }
+  .ap-track  { height: 6px; background: #F0F0F0; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  .ap-fill   { height: 100%; border-radius: 3px; background: var(--ap-color); }
+  .ap-meta   { display: flex; justify-content: space-between; font-size: 10px; color: var(--light); }
+
+  /* ── LOB recovery table ──────────────────────────────────────── */
+  .lob-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
+
+  .lob-table { width: 100%; border-collapse: collapse; }
+  .lob-table th {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: var(--light);
+    padding: 0 10px 10px;
+    border-bottom: 2px solid #F0F0F0;
+    text-align: left;
+  }
+  .lob-table th.r { text-align: right; }
+  .lob-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #F8F8F8;
+    font-size: 12px;
+  }
+  .lob-table tr:last-child td { border-bottom: none; }
+  .lob-name { font-weight: 500; color: var(--text); }
+  .lob-bar-cell { width: 30%; }
+  .lob-bar-wrap { height: 6px; background: #F0F0F0; border-radius: 3px; overflow: hidden; }
+  .lob-bar { height: 100%; border-radius: 3px; background: var(--navy); opacity: .55; }
+  .lob-bar.tech { background: var(--navy); opacity: 1; }
+  .lob-amount { font-weight: 700; color: var(--navy); text-align: right; }
+  .lob-method { text-align: right; }
+  .method-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-left: 3px;
+  }
+
+  /* method legend */
+  .method-legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #F0F0F0;
+    font-size: 10px;
+    color: var(--light);
+  }
+  .ml-item { display: flex; align-items: center; gap: 5px; }
+
+  /* Concentration risk card */
+  .conc-card { display: flex; flex-direction: column; gap: 12px; }
+  .conc-row  {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: #FAFAFA;
+  }
+  .conc-icon { font-size: 18px; flex-shrink: 0; }
+  .conc-title{ font-size: 12px; font-weight: 700; color: var(--navy); }
+  .conc-sub  { font-size: 11px; color: var(--light); margin-top: 1px; }
+  .conc-amt  { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--navy); flex-shrink: 0; text-align: right; }
+  .conc-pct  { font-size: 10px; color: var(--light); text-align: right; }
+
+  /* ── Decisions needed ─────────────────────────────────────────── */
+  .decision-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+  .decision-card {
+    background: white;
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    border-left: 4px solid var(--dc-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dc-header { display: flex; align-items: center; gap: 10px; }
+  .dc-icon   {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--dc-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .dc-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .dc-amount{ font-size: 22px; font-weight: 700; color: var(--dc-color); letter-spacing: -.5px; }
+  .dc-body  { font-size: 12px; color: var(--light); line-height: 1.6; }
+  .dc-tag   {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: var(--dc-bg);
+    color: var(--dc-color);
+    margin-top: 4px;
+  }
+
+  /* ── YoY trend row ────────────────────────────────────────────── */
+  .trend-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .trend-card {
+    background: white;
+    border-radius: 8px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .tc-label { font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--light); margin-bottom: 6px; }
+  .tc-value { font-size: 24px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; }
+  .tc-sub   { font-size: 11px; color: var(--light); margin-top: 3px; }
+  .tc-arrow { font-size: 11px; font-weight: 700; margin-top: 6px; }
+  .tc-arrow.up   { color: var(--amber); }
+  .tc-arrow.down { color: var(--green); }
+  .tc-current {
+    border-top: 3px solid var(--cyan);
+  }
+  .tc-current .tc-value { color: var(--cyan); }
+  .tc-current .tc-label { color: var(--cyan); }
+
+  /* ── Design notes ─────────────────────────────────────────────── */
+  .design-notes {
+    background: #FFFDE7;
+    border: 1px dashed #FBC02D;
+    border-radius: 8px;
+    padding: 22px 28px;
+    font-size: 12px;
+    color: #5D4037;
+  }
+  .design-notes h3 { font-size: 14px; font-weight: 700; color: #4E342E; margin-bottom: 14px; }
+  .design-notes ul { padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .design-notes li { line-height: 1.6; }
+  .design-notes strong { color: #4E342E; }
+  .vs-badge {
+    display: inline-block;
+    background: #E3F2FD;
+    color: #1565C0;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: .5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-left">
+    <div class="bci-logo">BCI</div>
+    <div class="header-divider"></div>
+    <div>
+      <div class="header-title">Technology Cost Dashboard</div>
+      <div class="header-sub">Executive view · CTO</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span><span class="live-dot"></span> Live · OC Data Refresh</span>
+    <span style="opacity:.4">|</span>
+    <span>FY2026 · Updated 23 April 2026</span>
+    <span style="opacity:.4">|</span>
+    <span style="font-weight:600;opacity:.9">Alex Chen · CTO</span>
+  </div>
+</div>
+
+<!-- ── Command strip ──────────────────────────────────────────────── -->
+<div class="command-strip">
+  <div class="cmd-cell">
+    <div class="cmd-label">Total Spend · FY2026 Actual</div>
+    <div class="cmd-value">$15.5M</div>
+    <div class="cmd-sub">
+      <span class="cmd-delta delta-good">▼ $4.2M under budget</span>
+      <span>vs $19.7M budget</span>
+    </div>
+  </div>
+  <div class="cmd-cell">
+    <div class="cmd-label">Showback Coverage</div>
+    <div class="cmd-value good">74.8%</div>
+    <div class="cmd-sub">
+      <span class="cmd-delta delta-good">▲ +12% vs FY2025</span>
+      <span>$11.6M of $15.5M shown back</span>
+    </div>
+  </div>
+  <div class="cmd-cell">
+    <div class="cmd-label">Unrecovered · Still in Technology</div>
+    <div class="cmd-value warn">$3.9M</div>
+    <div class="cmd-sub">
+      <span class="cmd-delta delta-warn">25.2% of total</span>
+      <span>needs allocation decision</span>
+    </div>
+  </div>
+  <div class="cmd-cell">
+    <div class="cmd-label">Data Readiness</div>
+    <div class="cmd-value alert">50.2%</div>
+    <div class="cmd-sub">
+      <span class="cmd-delta delta-alert">111 flags</span>
+      <span>of 223 items need review</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main ───────────────────────────────────────────────────────── -->
+<div class="page">
+
+  <!-- ① Programme health + budget + gap -->
+  <div class="programme-row">
+
+    <div class="coverage-card">
+      <div style="position:relative;width:100px;height:100px;flex-shrink:0">
+        <div class="coverage-ring"></div>
+        <div class="coverage-pct">74.8%</div>
+      </div>
+      <div>
+        <div class="coverage-label">Showback Programme Coverage</div>
+        <div class="coverage-sub">
+          <strong style="color:var(--navy)">$11.6M</strong> of the $15.5M Technology budget is now actively shown back or charged to LOBs.
+          This is up from <strong style="color:var(--navy)">~62%</strong> in FY2025.
+          The programme target is <strong style="color:var(--navy)">85%</strong> by end of FY2027.
+        </div>
+        <div class="coverage-target">▲ On track for 85% FY2027 target</div>
+      </div>
+    </div>
+
+    <div class="budget-card">
+      <div class="bv-eyebrow">Budget vs Actuals</div>
+      <div class="bv-amount">$15.5M</div>
+      <div class="bv-sub">Actuals · $4.2M favourable vs $19.7M budget</div>
+      <div class="bv-track">
+        <div class="bv-fill"></div>
+      </div>
+      <div class="bv-labels">
+        <span>$0</span>
+        <span style="color:var(--cyan);font-weight:700">$15.5M spent · 78.7%</span>
+        <span>$19.7M</span>
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--light)">FY2027 Forecast</span>
+          <span style="font-weight:700;color:var(--navy)">$16.8M <span style="color:var(--amber);font-weight:700">▲ +8.4%</span></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--light)">FY2028 Budget</span>
+          <span style="font-weight:700;color:var(--navy)">$17.4M <span style="color:var(--amber);font-weight:700">▲ +3.6%</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-eyebrow">Unrecovered — Needs Decision</div>
+      <div class="gap-amount">$3.9M</div>
+      <div class="gap-sub">
+        This cost is currently absorbed by the Technology department with no showback to any LOB.
+        37 line items across infrastructure and shared services have not yet been allocated to an approach.
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--light)">Candidate for headcount model</span>
+          <span style="font-weight:700;color:var(--navy)">~$2.4M</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--light)">Under $25K threshold</span>
+          <span style="font-weight:700;color:var(--navy)">$581k</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--light)">SimCorp (Spread Allocation only)</span>
+          <span style="font-weight:700;color:var(--navy)">~$900k</span>
+        </div>
+      </div>
+      <div class="gap-cta">▶ Assign allocation model →</div>
+    </div>
+
+  </div>
+
+  <!-- ② The 3 showback approaches: progress + amount -->
+  <div>
+    <div class="sh">
+      <div class="sh-title">Showback Programme — Approach Breakdown</div>
+      <div class="sh-sub">How the $11.6M shown back is distributed across the three active allocation methods</div>
+    </div>
+    <div class="approach-grid">
+
+      <div class="approach-card">
+        <div class="ap-header">
+          <div class="ap-name">Headcount-Based Showback</div>
+          <div class="ap-badge" style="--ap-bg:rgba(0,54,91,.1);--ap-color:#00365B">Primary model</div>
+        </div>
+        <div class="ap-amount">$9.1M</div>
+        <div class="ap-sub">58.8% of total Technology spend · 132 line items</div>
+        <div class="ap-track"><div class="ap-fill" style="width:58.8%;background:#00365B"></div></div>
+        <div class="ap-meta">
+          <span>Shared across all 12 LOBs proportional to FY2026 headcount</span>
+          <span style="font-weight:700;color:#00365B">58.8%</span>
+        </div>
+      </div>
+
+      <div class="approach-card">
+        <div class="ap-header">
+          <div class="ap-name">Consumption-Based Showback</div>
+          <div class="ap-badge" style="--ap-bg:rgba(0,171,189,.1);--ap-color:#00ABBD">Growing</div>
+        </div>
+        <div class="ap-amount">$2.5M</div>
+        <div class="ap-sub">16.0% of total Technology spend · 54 line items</div>
+        <div class="ap-track"><div class="ap-fill" style="width:16%;background:#00ABBD"></div></div>
+        <div class="ap-meta">
+          <span>Azure + on-prem metering · some items transitioning to chargeback</span>
+          <span style="font-weight:700;color:#00ABBD">16.0%</span>
+        </div>
+      </div>
+
+      <div class="approach-card">
+        <div class="ap-header">
+          <div class="ap-name">Direct Chargeback</div>
+          <div class="ap-badge" style="--ap-bg:rgba(220,100,43,.1);--ap-color:#DC642B">LOB-specific</div>
+        </div>
+        <div class="ap-amount">$2.1M</div>
+        <div class="ap-sub">13.7% of total Technology spend · 37 line items</div>
+        <div class="ap-track"><div class="ap-fill" style="width:13.7%;background:#DC642B"></div></div>
+        <div class="ap-meta">
+          <span>Hard-charged to owning LOB · confirmation required each cycle</span>
+          <span style="font-weight:700;color:#DC642B">13.7%</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ③ LOB recovery + concentration -->
+  <div class="lob-grid">
+
+    <div class="card">
+      <div class="sh" style="margin-bottom:14px">
+        <div class="sh-title">Cost Recovery by Line of Business</div>
+        <div class="sh-sub">Total allocated technology cost per LOB — headcount showback + consumption + chargeback combined</div>
+      </div>
+      <table class="lob-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Line of Business</th>
+            <th class="lob-bar-cell"></th>
+            <th class="r">Allocated</th>
+            <th class="r">Methods</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#F8FBFF">
+            <td style="color:#BFBFBF;font-size:11px">—</td>
+            <td class="lob-name" style="color:var(--navy);font-weight:700;font-style:italic">Technology (absorbed)</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar tech" style="width:100%"></div></div></td>
+            <td class="lob-amount" style="color:var(--navy)">$3.3M</td>
+            <td class="lob-method" style="color:var(--light);font-size:11px">Internal</td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">1</td>
+            <td class="lob-name">CM&amp;CI</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:60.6%"></div></div></td>
+            <td class="lob-amount">$2.0M</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B" title="Headcount"></span>
+              <span class="method-dot" style="background:#00ABBD" title="Consumption"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">2</td>
+            <td class="lob-name">Finance</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:54.5%"></div></div></td>
+            <td class="lob-amount">$1.8M</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B"></span>
+              <span class="method-dot" style="background:#00ABBD"></span>
+              <span class="method-dot" style="background:#DC642B"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">3</td>
+            <td class="lob-name">CD&amp;O + Corp Ops</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:45.5%"></div></div></td>
+            <td class="lob-amount">$1.5M</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B"></span>
+              <span class="method-dot" style="background:#00ABBD"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">4</td>
+            <td class="lob-name">ISR</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:39.4%"></div></div></td>
+            <td class="lob-amount">$1.3M</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">5</td>
+            <td class="lob-name">PE</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:36.4%"></div></div></td>
+            <td class="lob-amount">$1.2M</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B"></span>
+              <span class="method-dot" style="background:#DC642B"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">6</td>
+            <td class="lob-name">IRR</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:30.3%"></div></div></td>
+            <td class="lob-amount">$1.0M</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">7</td>
+            <td class="lob-name">Legal</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:30.1%"></div></div></td>
+            <td class="lob-amount">$993k</td>
+            <td class="lob-method">
+              <span class="method-dot" style="background:#00365B"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#BFBFBF;font-size:11px">8–11</td>
+            <td class="lob-name" style="color:var(--light)">IO, HR, Audit, CEO</td>
+            <td class="lob-bar-cell"><div class="lob-bar-wrap"><div class="lob-bar" style="width:18%"></div></div></td>
+            <td class="lob-amount" style="color:var(--light)">$1.9M</td>
+            <td class="lob-method" style="color:var(--light);font-size:11px">mixed</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="method-legend">
+        <div class="ml-item"><span class="method-dot" style="background:#00365B;width:9px;height:9px"></span>Headcount showback</div>
+        <div class="ml-item"><span class="method-dot" style="background:#00ABBD;width:9px;height:9px"></span>Consumption showback</div>
+        <div class="ml-item"><span class="method-dot" style="background:#DC642B;width:9px;height:9px"></span>Chargeback</div>
+      </div>
+    </div>
+
+    <!-- Concentration + coverage insights -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="card">
+        <div class="sh-title" style="margin-bottom:12px">Coverage by LOB</div>
+        <div class="conc-card">
+          <div class="conc-row" style="background:#F0FFF4">
+            <div class="conc-icon">✅</div>
+            <div>
+              <div class="conc-title">Fully shown back</div>
+              <div class="conc-sub">All cost attributed via headcount, consumption, or chargeback</div>
+            </div>
+            <div>
+              <div class="conc-amt">8 LOBs</div>
+              <div class="conc-pct">$9.3M covered</div>
+            </div>
+          </div>
+          <div class="conc-row" style="background:#FFF8E1">
+            <div class="conc-icon">⚠️</div>
+            <div>
+              <div class="conc-title">Partial coverage</div>
+              <div class="conc-sub">Some cost lines not yet mapped to a showback method</div>
+            </div>
+            <div>
+              <div class="conc-amt">3 LOBs</div>
+              <div class="conc-pct">$2.3M partial</div>
+            </div>
+          </div>
+          <div class="conc-row" style="background:#FFF3E0">
+            <div class="conc-icon">🔴</div>
+            <div>
+              <div class="conc-title">Technology absorbing</div>
+              <div class="conc-sub">$3.9M not attributed to any LOB this cycle</div>
+            </div>
+            <div>
+              <div class="conc-amt">$3.9M</div>
+              <div class="conc-pct">25.2% of total</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sh-title" style="margin-bottom:12px">Top 3 LOBs = 35.5% of bill</div>
+        <div style="font-size:11px;color:var(--light);margin-bottom:12px;line-height:1.6">
+          CM&amp;CI, Finance, and CD&amp;O + Corp Ops together account for $5.3M — over a third of total Technology spend.
+          Headcount model drives most of this; chargeback items in Finance and PE need annual confirmation.
+        </div>
+        <div style="padding:12px 14px;background:#F8FBFF;border-radius:6px;font-size:12px">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:4px">Recommended action</div>
+          <div style="color:var(--light);line-height:1.6">
+            Validate chargeback line items with Finance and PE before Q1 reporting. Consumption data for CM&amp;CI should be confirmed against Azure billing before finalising.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ④ Year-over-year trend -->
+  <div>
+    <div class="sh">
+      <div class="sh-title">Cost Trajectory</div>
+      <div class="sh-sub">Technology spend trend across fiscal years — actuals, forecast, and approved budget ceiling</div>
+    </div>
+    <div class="trend-row">
+      <div class="trend-card">
+        <div class="tc-label">FY2025 Actual</div>
+        <div class="tc-value" style="color:var(--light)">$14.2M</div>
+        <div class="tc-sub">Prior year baseline</div>
+        <div class="tc-arrow">— Baseline</div>
+      </div>
+      <div class="trend-card tc-current">
+        <div class="tc-label">FY2026 Actual</div>
+        <div class="tc-value">$15.5M</div>
+        <div class="tc-sub">$4.2M under budget</div>
+        <div class="tc-arrow up">▲ +9.2% YoY · Current year</div>
+      </div>
+      <div class="trend-card">
+        <div class="tc-label">FY2027 Forecast</div>
+        <div class="tc-value" style="color:var(--light)">$16.8M</div>
+        <div class="tc-sub">8.4% projected growth</div>
+        <div class="tc-arrow up">▲ +8.4% projected</div>
+      </div>
+      <div class="trend-card">
+        <div class="tc-label">FY2028 Budget</div>
+        <div class="tc-value" style="color:var(--light)">$17.4M</div>
+        <div class="tc-sub">Approved ceiling</div>
+        <div class="tc-arrow down">▲ +3.6% · Board approved</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ Decisions needed -->
+  <div>
+    <div class="sh">
+      <div class="sh-title">Decisions Needed — This Cycle</div>
+      <div class="sh-sub">Three items require CTO input or sign-off before the period is closed</div>
+    </div>
+    <div class="decision-grid">
+
+      <div class="decision-card" style="--dc-color:var(--amber);--dc-bg:#FFF3E0">
+        <div class="dc-header">
+          <div class="dc-icon">🔓</div>
+          <div class="dc-title">$3.9M Unrecovered Cost</div>
+        </div>
+        <div class="dc-amount">$3.9M</div>
+        <div class="dc-body">
+          37 line items have no showback approach assigned. Approve moving eligible items to headcount model (~$2.4M), retain SimCorp as Spread Allocation (~$900k), and assess $581k below the $25K threshold.
+        </div>
+        <div class="dc-tag">Approve allocation model</div>
+      </div>
+
+      <div class="decision-card" style="--dc-color:#DC642B;--dc-bg:#FBE9E7">
+        <div class="dc-header">
+          <div class="dc-icon">💳</div>
+          <div class="dc-title">Chargeback Confirmation</div>
+        </div>
+        <div class="dc-amount">$2.1M</div>
+        <div class="dc-body">
+          37 line items are flagged as Chargeback. These require annual confirmation with Finance and PE that the dedicated services are still in use and correctly attributed. Sign-off needed before Q1 reporting.
+        </div>
+        <div class="dc-tag">Confirm with LOBs</div>
+      </div>
+
+      <div class="decision-card" style="--dc-color:var(--red);--dc-bg:#FFEBEE">
+        <div class="dc-header">
+          <div class="dc-icon">🚩</div>
+          <div class="dc-title">Data Quality — 111 Items</div>
+        </div>
+        <div class="dc-amount">111</div>
+        <div class="dc-body">
+          49.8% of line items have data quality flags — missing PID codes, unresolved cost model entries, or unmatched allocation logic. Allocations are best-guess. Assign to Technology Finance team to resolve before end of Q1.
+        </div>
+        <div class="dc-tag">Assign to Finance team</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Design rationale ──────────────────────────────────────────── -->
+  <div class="design-notes">
+    <h3>🎨 Design Rationale — CTO view vs Admin vs Stakeholder</h3>
+    <ul>
+      <li>
+        <strong>Dark command strip at the top:</strong> A CTO opens this at 8am and needs 4 numbers in under 5 seconds — total spend, showback coverage, unrecovered amount, and data health. The dark strip with colour-coded values (green/amber/red) gives the status at a glance before they read a single word.
+        <span class="vs-badge">vs Admin</span> Admin sees item counts and operational flags. CTO sees programme-level metrics.
+      </li>
+      <li>
+        <strong>Showback coverage % is the headline metric, not total spend:</strong> The CTO's job is to maximise the showback coverage rate — that is the strategic goal of the programme. 74.8% is the number that tells them whether the programme is working. Total spend ($15.5M) is secondary — it's context, not the outcome.
+        <span class="vs-badge">vs Stakeholder</span> A stakeholder cares about their bill. The CTO cares about the programme coverage rate.
+      </li>
+      <li>
+        <strong>$3.9M unrecovered is a decision card, not a hidden fact:</strong> In the admin and stakeholder views, this gap is either buried or invisible. For the CTO it is the most important call-to-action — they need to approve which items move to headcount model, which stay as spread allocation, and which are below the materiality threshold. The gap card surfaces this prominently with a breakdown of what to do with each slice.
+      </li>
+      <li>
+        <strong>LOB table shows the methods per LOB (coloured dots), not just amounts:</strong> A CTO needs to understand which LOBs are on which model, not just their dollar amount. The coloured dots (headcount/consumption/chargeback) let them see at a glance that ISR is headcount-only and may be a candidate for a consumption model, while Finance uses all three.
+        <span class="vs-badge">vs Stakeholder</span> Stakeholders see their own department only. CTO sees all 12 in one ranked view.
+      </li>
+      <li>
+        <strong>"Decisions Needed" section at the bottom:</strong> Unlike the stakeholder view (which has no actions) and the admin view (which has operational flags), the CTO view ends with three decision cards — each with a recommended action and ownership. These are strategic/governance decisions, not operational fixes. The CTO should be able to read this section and write three emails.
+      </li>
+      <li>
+        <strong>4-year cost trajectory instead of a donut:</strong> The CTO is accountable to the board for technology cost trajectory. FY2025 → FY2026 → FY2027 → FY2028 in a single row answers "are we growing sustainably?" and "are we on track against the approved budget ceiling?" The donut chart (showback type split) is operational detail, not executive information.
+      </li>
+      <li>
+        <strong>Data quality is framed as a governance risk, not an operational task:</strong> 111 flags means 49.8% of allocations are best-guess. A CTO needs to know this not to fix it themselves, but to assign it as a task with accountability. The decision card frames it as "Assign to Finance team" — a management action, not a data entry problem.
+      </li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

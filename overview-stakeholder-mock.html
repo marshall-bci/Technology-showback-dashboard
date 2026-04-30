@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCI Technology — Cost Overview (Stakeholder View)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #00365B;
+    --cyan:   #00ABBD;
+    --orange: #DC642B;
+    --green:  #2E7D32;
+    --gray1:  #F2F2F2;
+    --text:   #515254;
+    --light:  #696F79;
+  }
+
+  body {
+    font-family: 'Open Sans', Calibri, sans-serif;
+    background: var(--gray1);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────────────── */
+  .topbar {
+    background: var(--navy);
+    color: white;
+    padding: 16px 40px 0;
+  }
+  .topbar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 16px; }
+  .bci-logo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-right: 1px solid rgba(255,255,255,.25);
+    padding-right: 16px;
+  }
+  .topbar-title { font-size: 16px; font-weight: 600; opacity: .9; }
+  .topbar-sub   { font-size: 11px; opacity: .5; margin-top: 2px; }
+  .topbar-user  {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    opacity: .8;
+  }
+  .avatar {
+    width: 32px; height: 32px;
+    background: var(--cyan);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    padding: 7px 18px;
+    border: 1px solid rgba(255,255,255,.2);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    color: rgba(255,255,255,.75);
+    font-size: 12px;
+    cursor: pointer;
+    background: transparent;
+    font-family: inherit;
+  }
+  .tab.active { background: var(--cyan); border-color: var(--cyan); color: white; font-weight: 600; }
+
+  /* ── Period selector pill ──────────────────────────────────────── */
+  .period-bar {
+    background: white;
+    border-bottom: 1px solid #E8E8E8;
+    padding: 10px 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .period-bar span { color: var(--light); font-weight: 500; }
+  .period-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--navy);
+    color: white;
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .period-pill-alt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #D0D0D0;
+    color: var(--light);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .separator { color: #D0D0D0; margin: 0 4px; }
+
+  /* ── Layout ──────────────────────────────────────────────────── */
+  .page { padding: 28px 40px; display: flex; flex-direction: column; gap: 24px; }
+
+  /* ── Executive headline ──────────────────────────────────────── */
+  .headline-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: end;
+  }
+  .headline-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 8px;
+  }
+  .headline-amount {
+    font-size: 56px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  .headline-amount sup {
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: 0;
+    vertical-align: top;
+    margin-top: 10px;
+    display: inline-block;
+  }
+  .headline-context {
+    font-size: 14px;
+    color: var(--light);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+  .headline-context strong { color: var(--navy); font-weight: 600; }
+
+  .budget-block {
+    background: white;
+    border-radius: 10px;
+    padding: 20px 28px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    min-width: 220px;
+  }
+  .bb-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--light); margin-bottom: 6px; }
+  .bb-value { font-size: 28px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; }
+  .bb-sub   { font-size: 12px; color: var(--light); margin-top: 4px; }
+  .bb-pill  {
+    display: inline-block;
+    margin-top: 8px;
+    background: #E8F5E9;
+    color: var(--green);
+    border-radius: 12px;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .bb-bar-track {
+    height: 5px;
+    background: #F0F0F0;
+    border-radius: 3px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .bb-bar-fill { height: 100%; width: 78.7%; background: var(--cyan); border-radius: 3px; }
+
+  /* ── Divider ─────────────────────────────────────────────────── */
+  .divider { border: none; border-top: 1px solid #E0E0E0; }
+
+  /* ── Section heading ─────────────────────────────────────────── */
+  .sh { margin-bottom: 14px; }
+  .sh-title { font-size: 15px; font-weight: 700; color: var(--navy); }
+  .sh-sub   { font-size: 12px; color: var(--light); margin-top: 2px; line-height: 1.5; }
+
+  /* ── "How your cost is calculated" cards ─────────────────────── */
+  .model-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  .model-card {
+    background: white;
+    border-radius: 10px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    position: relative;
+    overflow: hidden;
+  }
+  .model-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--mc-color);
+  }
+  .model-number {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--mc-color);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .model-number::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--mc-color);
+    opacity: .2;
+  }
+  .model-title { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .model-plain { font-size: 12px; color: var(--text); line-height: 1.7; }
+  .model-amount-row {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #F0F0F0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .model-amount { font-size: 22px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; }
+  .model-pct    { font-size: 12px; color: var(--mc-color); font-weight: 700; background: rgba(0,0,0,.04); padding: 3px 10px; border-radius: 10px; }
+  .model-items  { font-size: 11px; color: var(--light); margin-top: 3px; }
+
+  /* ── Department comparison ───────────────────────────────────── */
+  .dept-section { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; align-items: start; }
+
+  .card {
+    background: white;
+    border-radius: 10px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+
+  .dept-list { display: flex; flex-direction: column; gap: 0; }
+  .dept-row-s {
+    display: grid;
+    grid-template-columns: 24px 150px 1fr 64px 52px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-top: 1px solid #F5F5F5;
+  }
+  .dept-row-s:first-child { border-top: none; padding-top: 0; }
+  .dr-rank { font-size: 11px; color: #BFBFBF; text-align: right; }
+  .dr-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .dr-name.highlight { font-weight: 700; color: var(--navy); }
+  .dr-bar-wrap { height: 10px; background: #F0F0F0; border-radius: 5px; overflow: hidden; }
+  .dr-bar { height: 100%; border-radius: 5px; background: #BFBFBF; }
+  .dr-bar.highlight { background: var(--cyan); }
+  .dr-bar.tech { background: var(--navy); opacity: .6; }
+  .dr-amt { font-size: 13px; font-weight: 700; color: var(--navy); text-align: right; }
+  .dr-pct { font-size: 11px; color: var(--light); text-align: right; }
+
+  /* What-drives-your-bill side card */
+  .driver-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .driver-item { display: flex; align-items: center; gap: 12px; }
+  .driver-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .driver-label { font-size: 12px; font-weight: 600; color: var(--navy); }
+  .driver-sub   { font-size: 11px; color: var(--light); }
+  .driver-amt   { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--navy); text-align: right; flex-shrink: 0; }
+  .driver-pct   { font-size: 10px; color: var(--light); text-align: right; }
+
+  /* ── Year-over-year / period comparison ─────────────────────── */
+  .period-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+  .period-card {
+    background: white;
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    text-align: center;
+  }
+  .pc-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--light); margin-bottom: 8px; }
+  .pc-value { font-size: 24px; font-weight: 700; color: var(--navy); letter-spacing: -.5px; }
+  .pc-sub   { font-size: 11px; color: var(--light); margin-top: 4px; }
+  .pc-active { border: 2px solid var(--cyan); }
+  .pc-active .pc-label { color: var(--cyan); }
+  .pc-active .pc-value { color: var(--cyan); }
+  .pc-tag {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--cyan);
+    color: white;
+    border-radius: 8px;
+    padding: 2px 8px;
+  }
+
+  /* ── Methodology note ────────────────────────────────────────── */
+  .method-note {
+    background: white;
+    border-radius: 10px;
+    padding: 20px 28px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .method-icon { font-size: 24px; }
+  .method-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .method-body  { font-size: 12px; color: var(--light); line-height: 1.8; }
+  .method-body strong { color: var(--text); }
+
+  /* ── Footer ─────────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    color: #BFBFBF;
+    padding: 8px 0 24px;
+  }
+
+  /* ── Design notes ────────────────────────────────────────────── */
+  .design-notes {
+    background: #FFFDE7;
+    border: 1px dashed #FBC02D;
+    border-radius: 10px;
+    padding: 22px 28px;
+    font-size: 12px;
+    color: #5D4037;
+  }
+  .design-notes h3 { font-size: 14px; font-weight: 700; color: #4E342E; margin-bottom: 14px; }
+  .design-notes ul { padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .design-notes li { line-height: 1.6; }
+  .design-notes strong { color: #4E342E; }
+
+  /* Removed badge */
+  .removed-badge {
+    display: inline-block;
+    background: #FFEBEE;
+    color: #C62828;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .added-badge {
+    display: inline-block;
+    background: #E8F5E9;
+    color: #2E7D32;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Top navigation ────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="topbar-row">
+    <div class="topbar-brand">
+      <div class="bci-logo">BCI</div>
+      <div>
+        <div class="topbar-title">Technology Cost Overview</div>
+        <div class="topbar-sub">FY2026 · British Columbia Investment Management Corporation</div>
+      </div>
+    </div>
+    <div class="topbar-user">
+      <div style="text-align:right">
+        <div style="font-weight:600">Sarah Leblanc</div>
+        <div style="font-size:11px;opacity:.55">Finance Department</div>
+      </div>
+      <div class="avatar">SL</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active">Overview</button>
+    <button class="tab">By Department</button>
+    <button class="tab">By Cost Type</button>
+    <button class="tab">Technology Detail</button>
+  </div>
+</div>
+
+<!-- ── Period selector ───────────────────────────────────────────── -->
+<div class="period-bar">
+  <span>Viewing period</span>
+  <div class="period-pill">● FY2026 (Actual)</div>
+  <div class="period-pill-alt">FY2027 (Forecast)</div>
+  <div class="period-pill-alt">FY2028 (Budget)</div>
+  <span class="separator">|</span>
+  <span style="color:#BFBFBF;font-size:11px">Last updated 23 April 2026</span>
+</div>
+
+<!-- ── Page ──────────────────────────────────────────────────────── -->
+<div class="page">
+
+  <!-- ① Executive headline -->
+  <div class="headline-row">
+    <div>
+      <div class="headline-eyebrow">Total Technology Cost — FY2026 Actual</div>
+      <div class="headline-amount"><sup>$</sup>15.5<span style="font-size:28px;font-weight:400;color:var(--light)">M</span></div>
+      <div class="headline-context">
+        BCI Technology is managing <strong>$15.5M</strong> in operating costs for FY2026.
+        Of this, <strong>$11.6M (74.8%)</strong> is actively shared back to departments through
+        headcount allocation, consumption metering, or direct chargeback.
+        The remaining <strong>$3.9M</strong> is absorbed by the Technology department directly.
+      </div>
+    </div>
+    <div class="budget-block">
+      <div class="bb-label">FY2026 Budget</div>
+      <div class="bb-value">$19.7M</div>
+      <div class="bb-sub">Technology is tracking $4.2M under budget</div>
+      <div class="bb-pill">▼ 21.3% under budget</div>
+      <div class="bb-bar-track"><div class="bb-bar-fill"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#BFBFBF;margin-top:4px"><span>$0</span><span>78.7% used</span><span>$19.7M</span></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ② How your cost is calculated -->
+  <div>
+    <div class="sh">
+      <div class="sh-title">How Technology Costs Are Shared</div>
+      <div class="sh-sub">Technology uses three methods to allocate costs to departments — here is what each means for your team.</div>
+    </div>
+    <div class="model-grid">
+
+      <div class="model-card" style="--mc-color:#00365B">
+        <div class="model-number">Method 1 · Headcount-Based Showback</div>
+        <div class="model-title">Your share of shared infrastructure</div>
+        <div class="model-plain">
+          Shared technology platforms — such as the corporate network, end-user computing, and enterprise software — are allocated to each department based on
+          <strong>how many people are in your team</strong> relative to the total headcount at BCI. A larger team receives a proportionally larger share.
+          <br><br>
+          <span style="color:var(--navy);font-weight:600">This is a showback, not a hard charge.</span> It is provided for awareness and cost transparency.
+        </div>
+        <div class="model-amount-row">
+          <div>
+            <div class="model-amount">$9.1M</div>
+            <div class="model-items">across 132 cost lines</div>
+          </div>
+          <div class="model-pct">58.8% of total</div>
+        </div>
+      </div>
+
+      <div class="model-card" style="--mc-color:#00ABBD">
+        <div class="model-number">Method 2 · Consumption-Based Showback</div>
+        <div class="model-title">Cloud & usage costs by what you use</div>
+        <div class="model-plain">
+          Cloud computing, storage, and certain on-demand services are allocated based on
+          <strong>actual measured consumption</strong> — the more your team uses, the more you see shown back.
+          Usage data is collected from Azure and on-premises monitoring tools.
+          <br><br>
+          <span style="color:var(--navy);font-weight:600">Some of these transition to full chargeback</span> after a one-year showback period once the model is validated.
+        </div>
+        <div class="model-amount-row">
+          <div>
+            <div class="model-amount">$2.5M</div>
+            <div class="model-items">across 54 cost lines</div>
+          </div>
+          <div class="model-pct">16.0% of total</div>
+        </div>
+      </div>
+
+      <div class="model-card" style="--mc-color:#DC642B">
+        <div class="model-number">Method 3 · Direct Chargeback</div>
+        <div class="model-title">Technology built or maintained for your LOB</div>
+        <div class="model-plain">
+          Systems and services that exist specifically for one line of business — such as bespoke applications, dedicated infrastructure, or LOB-specific licences — are
+          <strong>charged directly</strong> to that department. This is a hard cost recovery, not a showback.
+          <br><br>
+          <span style="color:var(--navy);font-weight:600">You are only charged for what is yours.</span> These amounts are agreed with your department each budget cycle.
+        </div>
+        <div class="model-amount-row">
+          <div>
+            <div class="model-amount">$2.1M</div>
+            <div class="model-items">across 37 cost lines</div>
+          </div>
+          <div class="model-pct">13.7% of total</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ③ Department comparison -->
+  <div>
+    <div class="sh">
+      <div class="sh-title">How Departments Compare</div>
+      <div class="sh-sub">Allocated technology cost by department for FY2026 (Actual) — includes headcount showback, consumption showback, and chargeback.</div>
+    </div>
+    <div class="dept-section">
+
+      <!-- Ranked dept list -->
+      <div class="card">
+        <div class="dept-list">
+
+          <div class="dept-row-s">
+            <span class="dr-rank" style="color:#696F79;font-weight:700">—</span>
+            <span class="dr-name" style="color:#696F79;font-style:italic">Technology (absorbed)</span>
+            <div class="dr-bar-wrap"><div class="dr-bar tech" style="width:100%"></div></div>
+            <span class="dr-amt" style="color:#696F79">$3.3M</span>
+            <span class="dr-pct">21.3%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">1</span>
+            <span class="dr-name">CM&amp;CI</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:60.6%"></div></div>
+            <span class="dr-amt">$2.0M</span>
+            <span class="dr-pct">12.9%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">2</span>
+            <span class="dr-name highlight">Finance ← You</span>
+            <div class="dr-bar-wrap"><div class="dr-bar highlight" style="width:54.5%"></div></div>
+            <span class="dr-amt" style="color:var(--cyan)">$1.8M</span>
+            <span class="dr-pct">11.6%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">3</span>
+            <span class="dr-name">CD&amp;O + Corp Ops</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:45.5%"></div></div>
+            <span class="dr-amt">$1.5M</span>
+            <span class="dr-pct">9.7%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">4</span>
+            <span class="dr-name">ISR</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:39.4%"></div></div>
+            <span class="dr-amt">$1.3M</span>
+            <span class="dr-pct">8.4%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">5</span>
+            <span class="dr-name">PE</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:36.4%"></div></div>
+            <span class="dr-amt">$1.2M</span>
+            <span class="dr-pct">7.7%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">6</span>
+            <span class="dr-name">IRR</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:30.3%"></div></div>
+            <span class="dr-amt">$1.0M</span>
+            <span class="dr-pct">6.5%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">7</span>
+            <span class="dr-name">Legal</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:30.1%"></div></div>
+            <span class="dr-amt">$993k</span>
+            <span class="dr-pct">6.4%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">8</span>
+            <span class="dr-name">IO</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:25%"></div></div>
+            <span class="dr-amt">$825k</span>
+            <span class="dr-pct">5.3%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">9</span>
+            <span class="dr-name">HR</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:20.9%"></div></div>
+            <span class="dr-amt">$690k</span>
+            <span class="dr-pct">4.4%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">10</span>
+            <span class="dr-name">Audit</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:9.2%"></div></div>
+            <span class="dr-amt">$303k</span>
+            <span class="dr-pct">2.0%</span>
+          </div>
+
+          <div class="dept-row-s">
+            <span class="dr-rank">11</span>
+            <span class="dr-name">CEO</span>
+            <div class="dr-bar-wrap"><div class="dr-bar" style="width:2%"></div></div>
+            <span class="dr-amt">$67k</span>
+            <span class="dr-pct">0.4%</span>
+          </div>
+
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid #F0F0F0;display:flex;justify-content:space-between;font-size:11px;color:var(--light)">
+          <span>Technology's absorbed cost ($3.3M) is not charged to any department</span>
+          <a href="#" style="color:var(--cyan);font-weight:600;text-decoration:none">Detailed view →</a>
+        </div>
+      </div>
+
+      <!-- What drives your bill -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <div class="card" style="border-left:3px solid var(--cyan)">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">Finance Department</div>
+          <div style="font-size:11px;color:var(--light);margin-bottom:14px">Your allocated share for FY2026 (Actual)</div>
+          <div style="font-size:32px;font-weight:700;color:var(--cyan);letter-spacing:-.5px;margin-bottom:4px">$1.8M</div>
+          <div style="font-size:12px;color:var(--light);margin-bottom:16px">11.6% of total Technology spend</div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--light);margin-bottom:10px">Breakdown by method</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:#00365B;border-radius:50%;display:inline-block"></span>Headcount showback</span>
+              <strong style="font-size:13px;color:var(--navy)">$1.1M</strong>
+            </div>
+            <div style="height:5px;background:#F0F0F0;border-radius:3px;overflow:hidden;margin-top:-4px;margin-bottom:4px">
+              <div style="width:61%;height:100%;background:#00365B;opacity:.7;border-radius:3px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:#00ABBD;border-radius:50%;display:inline-block"></span>Consumption showback</span>
+              <strong style="font-size:13px;color:var(--navy)">$480k</strong>
+            </div>
+            <div style="height:5px;background:#F0F0F0;border-radius:3px;overflow:hidden;margin-top:-4px;margin-bottom:4px">
+              <div style="width:26%;height:100%;background:#00ABBD;opacity:.7;border-radius:3px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:#DC642B;border-radius:50%;display:inline-block"></span>Direct chargeback</span>
+              <strong style="font-size:13px;color:var(--navy)">$220k</strong>
+            </div>
+            <div style="height:5px;background:#F0F0F0;border-radius:3px;overflow:hidden;margin-top:-4px">
+              <div style="width:12%;height:100%;background:#DC642B;opacity:.7;border-radius:3px"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">What drives Finance's bill</div>
+          <div class="driver-list">
+            <div class="driver-item">
+              <div class="driver-icon" style="background:#E8F4F8">🖥️</div>
+              <div>
+                <div class="driver-label">End-User Computing</div>
+                <div class="driver-sub">Headcount-based · 42 users</div>
+              </div>
+              <div>
+                <div class="driver-amt">$610k</div>
+                <div class="driver-pct">33.9%</div>
+              </div>
+            </div>
+            <div class="driver-item">
+              <div class="driver-icon" style="background:#E0F7FA">☁️</div>
+              <div>
+                <div class="driver-label">Cloud Infrastructure</div>
+                <div class="driver-sub">Consumption-based · Azure</div>
+              </div>
+              <div>
+                <div class="driver-amt">$390k</div>
+                <div class="driver-pct">21.7%</div>
+              </div>
+            </div>
+            <div class="driver-item">
+              <div class="driver-icon" style="background:#FFF3E0">📋</div>
+              <div>
+                <div class="driver-label">Enterprise Licences</div>
+                <div class="driver-sub">Headcount-based · M365, etc.</div>
+              </div>
+              <div>
+                <div class="driver-amt">$340k</div>
+                <div class="driver-pct">18.9%</div>
+              </div>
+            </div>
+            <div class="driver-item">
+              <div class="driver-icon" style="background:#FCE4EC">🔐</div>
+              <div>
+                <div class="driver-label">Financial Systems</div>
+                <div class="driver-sub">Direct chargeback · Finance-specific</div>
+              </div>
+              <div>
+                <div class="driver-amt">$220k</div>
+                <div class="driver-pct">12.2%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ④ Period comparison -->
+  <div>
+    <div class="sh">
+      <div class="sh-title">Year View</div>
+      <div class="sh-sub">Compare Technology cost across fiscal years and planning horizons.</div>
+    </div>
+    <div class="period-grid">
+      <div class="period-card">
+        <div class="pc-label">FY2025 Actual</div>
+        <div class="pc-value" style="color:var(--light)">$14.2M</div>
+        <div class="pc-sub">Prior year</div>
+      </div>
+      <div class="period-card pc-active">
+        <div class="pc-label">FY2026 Actual</div>
+        <div class="pc-value">$15.5M</div>
+        <div class="pc-sub">+9.2% vs prior year</div>
+        <div class="pc-tag">Viewing now</div>
+      </div>
+      <div class="period-card">
+        <div class="pc-label">FY2027 Forecast</div>
+        <div class="pc-value" style="color:var(--light)">$16.8M</div>
+        <div class="pc-sub">+8.4% projected growth</div>
+      </div>
+      <div class="period-card">
+        <div class="pc-label">FY2028 Budget</div>
+        <div class="pc-value" style="color:var(--light)">$17.4M</div>
+        <div class="pc-sub">Planned ceiling</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ⑤ Methodology note -->
+  <div class="method-note">
+    <div class="method-icon">ℹ️</div>
+    <div>
+      <div class="method-title">About this report</div>
+      <div class="method-body">
+        This report reflects Technology's operating costs for <strong>FY2026</strong> and how they are shared across BCI's lines of business.
+        Figures are sourced from the <strong>OC Data Refresh</strong> workbook maintained by the Technology Finance team and are updated each period.
+        <br><br>
+        Cost allocations follow the <strong>Technology Cost Management framework</strong> approved in April 2025.
+        Headcount-based allocations use the headcount figures as of the start of the fiscal year.
+        Consumption-based figures reflect metered usage through <strong>31 March 2026</strong>.
+        Questions about your department's allocation should be directed to the Technology Finance team.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Design rationale ──────────────────────────────────────────── -->
+  <div class="design-notes">
+    <h3>🎨 Design Rationale — What a stakeholder/viewer sees vs the admin view</h3>
+    <ul>
+      <li>
+        <strong>Tabs removed:</strong> "Upload (Test)" and "Admin" are gone entirely. The viewer tabs are Overview, By Department, By Cost Type, and Technology Detail — all read-only.
+        <span class="removed-badge">Removed</span> Data Quality tab — that is an internal operational concern, not a stakeholder concern.
+      </li>
+      <li>
+        <strong>Language changed throughout:</strong> No "line items", "cost model", "showback type", "PID codes", "GL codes", or "materiality threshold". Replaced with plain English — "how many people are in your team", "what you use", "built specifically for your LOB". Stakeholders are not data analysts.
+        <span class="removed-badge">Removed</span> Item counts (37 items, 54 items) from the approach tiles in the hero.
+      </li>
+      <li>
+        <strong>"Finance Department" personalised card:</strong> The most valuable thing a viewer sees is their own department's number and why they're being charged. This card surfaces it immediately with a breakdown by method and a "what drives your bill" section using plain-English category names (End-User Computing, Cloud Infrastructure, Enterprise Licences) not GL codes.
+        <span class="added-badge">New</span>
+      </li>
+      <li>
+        <strong>Department comparison is now a full table:</strong> All 12 departments are visible so a viewer can immediately see where they rank. "← You" label highlights their row. Technology is shown separately at the top labelled as "absorbed" so stakeholders understand it is not shared.
+      </li>
+      <li>
+        <strong>The 3 cost methods are explained in plain English:</strong> A department head should not need to ask "what does showback mean?" The method cards use paragraph-length explanations in plain language, including "this is a showback, not a hard charge" — which is the single most important thing to communicate to avoid confusion.
+        <span class="removed-badge">Removed</span> "Approach 4 · Direct / No Showback" — viewers don't need to know that $3.9M sits unallocated. That is an internal operational fact.
+      </li>
+      <li>
+        <strong>Period comparison row replaces the donut chart:</strong> The donut communicates cost split, which matters to an admin. A stakeholder wants to know: is my bill going up? The four-period comparison (FY2025 actual → FY2026 actual → FY2027 forecast → FY2028 budget) answers the trend question directly and invites them to click into future years.
+        <span class="removed-badge">Removed</span> Donut chart — no viewer needs to know showback split percentages.
+      </li>
+      <li>
+        <strong>Methodology note at the bottom:</strong> Stakeholders frequently ask "where does this data come from?" and "who do I call if I disagree?" A methodology footer answers both without cluttering the dashboard.
+        <span class="added-badge">New</span>
+      </li>
+      <li>
+        <strong>No action items, no flags, no thresholds:</strong> The 111 data quality flags and 64 materiality items are completely hidden. These are internal Technology team concerns. Showing them to a Finance VP or LOB head would create confusion and distrust ("why am I looking at broken data?"). They belong only in the admin view.
+        <span class="removed-badge">Removed</span>
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="footer">BCI Technology · Cost Management Report · FY2026 · This report is generated automatically from operational data. For questions contact technology.finance@bci.ca</div>
+
+</body>
+</html>

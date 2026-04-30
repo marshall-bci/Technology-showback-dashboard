@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>By Showback Type — Mockup v5</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Open Sans', Calibri, sans-serif; background: #F2F2F2; color: #00365B; font-size: 13px; }
+
+  /* nav */
+  .nav { background: #00365B; padding: 14px 20px 0; }
+  .nav-brand { font-size: 15px; font-weight: 700; color: white; }
+  .nav-sub   { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 2px; margin-bottom: 14px; }
+  .tabs { display: flex; gap: 2px; }
+  .tab { background: transparent; color: white; border: 1px solid rgba(255,255,255,.25); border-bottom: none; border-radius: 4px 4px 0 0; padding: 7px 16px; font-size: 13px; font-family: inherit; cursor: pointer; }
+  .tab.active { background: #00ABBD; border-color: #00ABBD; font-weight: 600; }
+
+  /* filter row */
+  .filter-bar { background: white; padding: 10px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; align-items: center; gap: 8px; }
+  .filter-label { font-size: 11px; color: #696F79; font-weight: 600; }
+  .pill { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid #E0E0E0; color: #696F79; background: white; font-family: inherit; cursor: pointer; }
+  .pill.active { background: #00ABBD; color: white; border-color: #00ABBD; }
+
+  .shell { max-width: 1100px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* card — exact match to dashboard card() helper */
+  .card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+
+  /* ── CARD ANATOMY — matches Overview KPI cards exactly ── */
+  .kc { padding: 18px 20px; }
+  .kc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .kc-name   { font-size: 12px; font-weight: 700; color: #00365B; padding-right: 8px; }
+  .kc-badge  { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 8px; flex-shrink: 0; }
+  .kc-amount { font-size: 22px; font-weight: 700; color: #00365B; letter-spacing: -0.5px; margin-bottom: 2px;
+               cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+  .kc-sub    { font-size: 11px; color: #696F79; margin-bottom: 12px; }
+  .kc-bar-bg { height: 6px; background: #F0F0F0; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  .kc-bar-fill { height: 100%; border-radius: 3px; }
+  .kc-footer { display: flex; justify-content: space-between; font-size: 10px; color: #696F79; }
+  .kc-meta   { flex: 1; }
+  .kc-pct    { font-weight: 700; flex-shrink: 0; padding-left: 6px; }
+
+  /* grids */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* section labels */
+  .sec-head { font-size: 14px; font-weight: 700; color: #00365B; margin-bottom: 2px; }
+  .sec-sub  { font-size: 11px; color: #696F79; margin-bottom: 14px; }
+
+  /* stacked bars */
+  .bar-section { padding: 20px 22px; }
+  .bar-rows { display: flex; flex-direction: column; gap: 16px; }
+  .bar-row  { display: flex; align-items: center; gap: 14px; }
+  .bar-cat  { width: 148px; font-size: 11px; color: #696F79; text-align: right; flex-shrink: 0; transition: color .2s, font-weight .2s; }
+  .bar-track { flex: 1; height: 4px; display: flex; align-items: center; overflow: visible; cursor: pointer; }
+  .seg {
+    height: 4px; flex-shrink: 0;
+    opacity: 0.3; filter: saturate(0.4);
+    transition: height .2s ease, opacity .2s, filter .2s, border-radius .2s;
+    position: relative;
+  }
+  .seg::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+    background: #00365B; color: white; font-size: 10px; font-weight: 600;
+    padding: 4px 8px; border-radius: 4px; white-space: nowrap;
+    pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 10; font-family: inherit;
+  }
+  .bar-rows:hover .seg { opacity: 0.12; filter: saturate(0.15); }
+  .bar-rows .bar-track:hover .seg { opacity: 1 !important; filter: saturate(1) !important; height: 8px; border-radius: 0; }
+  .bar-rows .bar-track:hover .seg:first-child { border-radius: 4px 0 0 4px; }
+  .bar-rows .bar-track:hover .seg:last-child  { border-radius: 0 4px 4px 0; }
+  .bar-rows .bar-track:hover .seg:only-child  { border-radius: 4px; }
+  .bar-rows .bar-track:hover .seg:hover::after { opacity: 1; }
+  .bar-row:hover .bar-cat { color: #00365B; font-weight: 600; }
+  .bar-total { width: 56px; font-size: 11px; font-weight: 600; color: #00365B; text-align: right; flex-shrink: 0; }
+
+  .legend-row { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #F2F2F2; }
+  .leg { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #696F79; }
+  .leg-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  /* table */
+  .tbl-head { padding: 16px 18px 12px; border-bottom: 1px solid #F2F2F2; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead tr { background: #00365B; color: white; }
+  th { padding: 9px 12px; font-weight: 600; text-align: right; white-space: nowrap; }
+  th:first-child { text-align: left; }
+  td { padding: 9px 12px; text-align: right; border-bottom: 1px solid #F5F5F5; color: #515254; }
+  td:first-child { text-align: left; color: #00365B; font-weight: 500; }
+  tr:nth-child(even) td { background: #FAFAFA; }
+  tr:hover td { background: #F0F7F9; }
+  tfoot td { background: #EEF2F7; font-weight: 700; color: #00365B; border-top: 2px solid #D0DAE8; }
+  .zero { color: #D9D9D9; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="nav-brand">Technology Showback Dashboard</div>
+  <div class="nav-sub">OC Data Refresh · Updated 2026-04-24, 4:29 p.m.</div>
+  <div class="tabs">
+    <div class="tab">Overview</div>
+    <div class="tab">Cost Management</div>
+    <div class="tab active">By Showback Type</div>
+    <div class="tab">Technology Detail</div>
+    <div class="tab">Data Quality <span style="background:#FF4444;color:white;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;">53</span></div>
+    <div class="tab">Admin</div>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <span class="filter-label">PERIOD</span>
+  <button class="pill active">FY2026 (Actual)</button>
+  <button class="pill">Budget</button>
+  <button class="pill">Forecast 1</button>
+  <button class="pill">Forecast 2</button>
+</div>
+
+<div class="shell">
+
+  <!-- Summary KPI row — same card anatomy as Overview -->
+  <div class="grid-3">
+
+    <div class="card kc">
+      <div class="kc-header">
+        <div class="kc-name">Shown back to business</div>
+        <div class="kc-badge" style="background:#00365B1A; color:#00365B;">74.9%</div>
+      </div>
+      <div class="kc-amount">$11.7M</div>
+      <div class="kc-sub">182 line items allocated to departments</div>
+      <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:74.9%; background:#00365B;"></div></div>
+      <div class="kc-footer">
+        <span class="kc-meta">Headcount + Consumption + Chargeback methods</span>
+        <span class="kc-pct" style="color:#00365B;">74.9%</span>
+      </div>
+    </div>
+
+    <div class="card kc">
+      <div class="kc-header">
+        <div class="kc-name">Not shown back</div>
+        <div class="kc-badge" style="background:#DC642B1A; color:#DC642B;">Needs decision</div>
+      </div>
+      <div class="kc-amount">$3.9M</div>
+      <div class="kc-sub">37 line items · no department owner assigned</div>
+      <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:25.1%; background:#DC642B;"></div></div>
+      <div class="kc-footer">
+        <span class="kc-meta">No Showback + No Showback (Tech) + None</span>
+        <span class="kc-pct" style="color:#DC642B;">25.1%</span>
+      </div>
+    </div>
+
+    <div class="card kc">
+      <div class="kc-header">
+        <div class="kc-name">Moving to chargeback</div>
+        <div class="kc-badge" style="background:#457B961A; color:#457B96;">Transitioning</div>
+      </div>
+      <div class="kc-amount">$2.1M</div>
+      <div class="kc-sub">11 items · consumption showback for 1 year then chargeback</div>
+      <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:13.3%; background:#457B96;"></div></div>
+      <div class="kc-footer">
+        <span class="kc-meta">Transitions to direct chargeback in FY2027</span>
+        <span class="kc-pct" style="color:#457B96;">13.3%</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Method cards — exact same card anatomy -->
+  <div>
+    <div class="sec-head">All showback methods</div>
+    <div class="sec-sub">Click any card to drill into its line items</div>
+    <div class="grid-3">
+
+      <div class="card kc">
+        <div class="kc-header">
+          <div class="kc-name">Showback (Headcount)</div>
+          <div class="kc-badge" style="background:#00365B1A; color:#00365B;">Primary model</div>
+        </div>
+        <div class="kc-amount">$9,192,771</div>
+        <div class="kc-sub">59.0% of total · 133 line items</div>
+        <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:87%; background:#00365B;"></div></div>
+        <div class="kc-footer">
+          <span class="kc-meta">Shared across all 12 LOBs proportional to FY2026 headcount</span>
+          <span class="kc-pct" style="color:#00365B;">87% of budget</span>
+        </div>
+      </div>
+
+      <div class="card kc">
+        <div class="kc-header">
+          <div class="kc-name">Showback (Consumption) → Chargeback</div>
+          <div class="kc-badge" style="background:#DC642B1A; color:#DC642B;">Transitioning</div>
+        </div>
+        <div class="kc-amount">$2,073,789</div>
+        <div class="kc-sub">13.3% of total · 11 line items</div>
+        <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:100%; background:#DC642B;"></div></div>
+        <div class="kc-footer">
+          <span class="kc-meta">Consumption showback for 1 year, then transitions to direct chargeback</span>
+          <span class="kc-pct" style="color:#DC642B;">13.3%</span>
+        </div>
+      </div>
+
+      <div class="card kc">
+        <div class="kc-header">
+          <div class="kc-name">No Showback</div>
+          <div class="kc-badge" style="background:#DC642B1A; color:#DC642B;">Unallocated</div>
+        </div>
+        <div class="kc-amount">$2,799,181</div>
+        <div class="kc-sub">18.0% of total · 7 line items</div>
+        <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:100%; background:#DC642B;"></div></div>
+        <div class="kc-footer">
+          <span class="kc-meta">No department owner — allocation decision required</span>
+          <span class="kc-pct" style="color:#DC642B;">18.0%</span>
+        </div>
+      </div>
+
+      <div class="card kc">
+        <div class="kc-header">
+          <div class="kc-name">No Showback — Technology's Cost</div>
+          <div class="kc-badge" style="background:#457B961A; color:#457B96;">Absorbed</div>
+        </div>
+        <div class="kc-amount">$1,032,290</div>
+        <div class="kc-sub">6.6% of total · 20 line items</div>
+        <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:74%; background:#457B96;"></div></div>
+        <div class="kc-footer">
+          <span class="kc-meta">Costs absorbed by Technology, not charged to any department</span>
+          <span class="kc-pct" style="color:#457B96;">6.6%</span>
+        </div>
+      </div>
+
+      <div class="card kc">
+        <div class="kc-header">
+          <div class="kc-name">Showback (Consumption)</div>
+          <div class="kc-badge" style="background:#00ABBD1A; color:#00ABBD;">Growing</div>
+        </div>
+        <div class="kc-amount">$407,895</div>
+        <div class="kc-sub">2.6% of total · 38 line items</div>
+        <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:62%; background:#00ABBD;"></div></div>
+        <div class="kc-footer">
+          <span class="kc-meta">Azure + on-prem metering · allocated by actual consumption</span>
+          <span class="kc-pct" style="color:#00ABBD;">2.6%</span>
+        </div>
+      </div>
+
+      <div class="card kc">
+        <div class="kc-header">
+          <div class="kc-name">Not Configured</div>
+          <div class="kc-badge" style="background:#BFBFBF1A; color:#696F79;">Incomplete</div>
+        </div>
+        <div class="kc-amount">$86,587</div>
+        <div class="kc-sub">0.6% of total · 10 line items</div>
+        <div class="kc-bar-bg"><div class="kc-bar-fill" style="width:55%; background:#BFBFBF;"></div></div>
+        <div class="kc-footer">
+          <span class="kc-meta">Showback type missing in Cost Model — update and rerun</span>
+          <span class="kc-pct" style="color:#DC642B;">Fix in Admin →</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Stacked bars -->
+  <div class="card bar-section">
+    <div class="sec-head">Method mix by Cost Model Category</div>
+    <div class="sec-sub">Hover a row to focus — shows how each category's spend is split across methods</div>
+    <div class="bar-rows">
+      <div class="bar-row">
+        <div class="bar-cat">Licensing</div>
+        <div class="bar-track">
+          <div class="seg" style="width:74%; background:#00365B;"  data-tip="Headcount · 74%"></div>
+          <div class="seg" style="width:14%; background:#DC642B;" data-tip="→ Chargeback · 14%"></div>
+          <div class="seg" style="width:6%;  background:#457B96;" data-tip="Tech's Own · 6%"></div>
+          <div class="seg" style="width:4%;  background:#696F79;" data-tip="No Showback · 4%"></div>
+          <div class="seg" style="width:2%;  background:#BFBFBF;" data-tip="None · 2%"></div>
+        </div>
+        <div class="bar-total">$9.65M</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-cat">Cloud Hosting</div>
+        <div class="bar-track">
+          <div class="seg" style="width:56%; background:#DC642B;" data-tip="→ Chargeback · 56%"></div>
+          <div class="seg" style="width:28%; background:#00ABBD;" data-tip="Consumption · 28%"></div>
+          <div class="seg" style="width:16%; background:#00365B;" data-tip="Headcount · 16%"></div>
+        </div>
+        <div class="bar-total">$1.72M</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-cat" style="font-size:10px">Non-Std Peripherals</div>
+        <div class="bar-track">
+          <div class="seg" style="width:88%; background:#00365B;" data-tip="Headcount · 88%"></div>
+          <div class="seg" style="width:8%;  background:#696F79;" data-tip="No Showback · 8%"></div>
+          <div class="seg" style="width:4%;  background:#457B96;" data-tip="Tech's Own · 4%"></div>
+        </div>
+        <div class="bar-total">$1.08M</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-cat">Technology Hardware</div>
+        <div class="bar-track">
+          <div class="seg" style="width:60%; background:#00365B;" data-tip="Headcount · 60%"></div>
+          <div class="seg" style="width:30%; background:#696F79;" data-tip="No Showback · 30%"></div>
+          <div class="seg" style="width:10%; background:#457B96;" data-tip="Tech's Own · 10%"></div>
+        </div>
+        <div class="bar-total">$0.94M</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-cat" style="font-size:10px">Categorised Tech Cost</div>
+        <div class="bar-track">
+          <div class="seg" style="width:55%; background:#457B96;" data-tip="Tech's Own · 55%"></div>
+          <div class="seg" style="width:35%; background:#00365B;" data-tip="Headcount · 35%"></div>
+          <div class="seg" style="width:10%; background:#696F79;" data-tip="No Showback · 10%"></div>
+        </div>
+        <div class="bar-total">$0.82M</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-cat">Managed Services</div>
+        <div class="bar-track">
+          <div class="seg" style="width:72%; background:#DC642B;" data-tip="→ Chargeback · 72%"></div>
+          <div class="seg" style="width:20%; background:#00365B;" data-tip="Headcount · 20%"></div>
+          <div class="seg" style="width:8%;  background:#00ABBD;" data-tip="Consumption · 8%"></div>
+        </div>
+        <div class="bar-total">$0.69M</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-cat">Standard Devices</div>
+        <div class="bar-track">
+          <div class="seg" style="width:65%; background:#00365B;" data-tip="Headcount · 65%"></div>
+          <div class="seg" style="width:22%; background:#00ABBD;" data-tip="Consumption · 22%"></div>
+          <div class="seg" style="width:13%; background:#696F79;" data-tip="No Showback · 13%"></div>
+        </div>
+        <div class="bar-total">$0.46M</div>
+      </div>
+    </div>
+    <div class="legend-row">
+      <div class="leg"><div class="leg-dot" style="background:#00365B;"></div>Showback (Headcount)</div>
+      <div class="leg"><div class="leg-dot" style="background:#DC642B;"></div>Showback (Consumption) → Chargeback</div>
+      <div class="leg"><div class="leg-dot" style="background:#00ABBD;"></div>Showback (Consumption)</div>
+      <div class="leg"><div class="leg-dot" style="background:#696F79;"></div>No Showback</div>
+      <div class="leg"><div class="leg-dot" style="background:#457B96;"></div>No Showback — Tech's Cost</div>
+      <div class="leg"><div class="leg-dot" style="background:#BFBFBF;"></div>Not Configured</div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="tbl-head">
+      <div class="sec-head">Full breakdown by GL Category</div>
+      <div class="sec-sub" style="margin-bottom:0">Dollar amount per category per showback method</div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left">GL Category</th>
+            <th>Headcount</th>
+            <th>Consumption</th>
+            <th>→ Chargeback</th>
+            <th>No SB (Tech)</th>
+            <th>No Showback</th>
+            <th>None</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Licensing</td><td>$7,142k</td><td class="zero">—</td><td>$1,351k</td><td>$579k</td><td>$386k</td><td>$193k</td><td style="font-weight:700">$9,651k</td></tr>
+          <tr><td>Cloud Hosting Services</td><td>$275k</td><td>$483k</td><td>$963k</td><td class="zero">—</td><td class="zero">—</td><td class="zero">—</td><td style="font-weight:700">$1,721k</td></tr>
+          <tr><td>Non-Std Peripherals</td><td>$951k</td><td class="zero">—</td><td class="zero">—</td><td>$86k</td><td>$43k</td><td class="zero">—</td><td style="font-weight:700">$1,080k</td></tr>
+          <tr><td>Technology Hardware</td><td>$564k</td><td class="zero">—</td><td class="zero">—</td><td>$282k</td><td>$94k</td><td class="zero">—</td><td style="font-weight:700">$940k</td></tr>
+          <tr><td>Categorised Tech Cost</td><td>$287k</td><td class="zero">—</td><td class="zero">—</td><td>$451k</td><td>$82k</td><td class="zero">—</td><td style="font-weight:700">$820k</td></tr>
+          <tr><td>Managed Services</td><td>$138k</td><td>$55k</td><td>$497k</td><td class="zero">—</td><td class="zero">—</td><td class="zero">—</td><td style="font-weight:700">$690k</td></tr>
+          <tr><td>Standard Devices</td><td>$299k</td><td>$101k</td><td class="zero">—</td><td class="zero">—</td><td>$60k</td><td class="zero">—</td><td style="font-weight:700">$460k</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td>Total</td><td>$9,192k</td><td>$407k</td><td>$2,073k</td><td>$1,032k</td><td>$2,799k</td><td>$86k</td><td>$15,591k</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
