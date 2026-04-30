@@ -675,12 +675,12 @@ export default function TechnologyShowbackDashboard() {
                 Local dev — no Azure AD needed
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <a href={`${API_URL}/auth/dev-login?email=testadmin@bci.ca`} style={{
+                <a href={`${API_URL}/auth/dev-login?email=testadmin@bci.ca&next=${encodeURIComponent(window.location.origin)}`} style={{
                   flex: 1, textAlign: 'center', padding: '9px',
                   border: '1px dashed #CCC', borderRadius: 6, color: '#515254',
                   textDecoration: 'none', fontSize: 12,
                 }}>Dev Admin</a>
-                <a href={`${API_URL}/auth/dev-login?email=testviewer@bci.ca`} style={{
+                <a href={`${API_URL}/auth/dev-login?email=testviewer@bci.ca&next=${encodeURIComponent(window.location.origin)}`} style={{
                   flex: 1, textAlign: 'center', padding: '9px',
                   border: '1px dashed #CCC', borderRadius: 6, color: '#515254',
                   textDecoration: 'none', fontSize: 12,
