@@ -719,7 +719,7 @@ export default function TechnologyShowbackDashboard() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap');`}</style>
 
       {/* ── Header ────────────────────────────────────────────────────────────── */}
-      <div style={{ background: NAVY, color: 'white', padding: '16px 32px' }}>
+      <div style={{ background: '#002847', color: 'white', padding: '16px 32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 0.3 }}>
@@ -907,7 +907,7 @@ export default function TechnologyShowbackDashboard() {
                     <span
                       onClick={() => setHeroModal({ section: 'Showback Coverage', title: 'Pending User Listing', note: 'Pending data', rows: c.pendingRows, total: c.pendingAmt })}
                       style={{ fontSize: 10, fontWeight: 600, color: '#FFD54F', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2, textTransform: 'none', letterSpacing: 0 }}
-                    >· {cadShort(c.pendingAmt)} pending</span>
+                    >· excl. {cadShort(c.pendingAmt)} pending</span>
                   )}
                 </div>
                 {c.breakdown ? (
@@ -1191,6 +1191,11 @@ export default function TechnologyShowbackDashboard() {
                     })}
                   </div>
                 </div>
+                {cmdPendingUserList > 0 && (
+                  <div style={{ marginTop: 12, fontSize: 11, color: '#8A929C', borderTop: '1px solid #EAECEE', paddingTop: 8, fontStyle: 'italic' }}>
+                    * Excludes {cadShort(cmdPendingUserList)} pending User Listing attribution — total will increase once allocation is complete.
+                  </div>
+                )}
               </div>
 
             </div>
