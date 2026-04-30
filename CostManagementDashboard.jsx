@@ -220,6 +220,7 @@ export default function TechnologyShowbackDashboard() {
   const [recalcStatus,    setRecalcStatus]    = useState('');
   const [recalcing,       setRecalcing]       = useState(false);
   const [heroModal,       setHeroModal]       = useState(null);
+  const [cmdExpandLabel,  setCmdExpandLabel]  = useState(null);
   const [sbHoverCat,      setSbHoverCat]      = useState(null);
   const [recalcBaseYear,  setRecalcBaseYear]  = useState(() => parseInt(localStorage.getItem('hcBaseYear')) || 2026);
   const [hcYearTypes,     setHcYearTypes]     = useState(() => {
@@ -891,9 +892,9 @@ export default function TechnologyShowbackDashboard() {
             pendingAmt: cmdPendingUserList,
             pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
             breakdown: [
-              { label: 'Headcount',   amount: cmdShowbackHC,    color: '#69F0AE',               pct: cmdShownBack > 0 ? cmdShowbackHC    / cmdShownBack * 100 : 0, section: 'Shown Back', rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _coverageDepts.some(d=>(r[d.key]||0)!==0)) },
-              { label: 'Consumption', amount: cmdShowbackCon,   color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackCon   / cmdShownBack * 100 : 0, section: 'Shown Back', rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
-              { label: 'Con → CB',    amount: cmdShowbackConCB, color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackConCB / cmdShownBack * 100 : 0, section: 'Shown Back', rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
+              { label: 'Headcount',   amount: cmdShowbackHC,    color: '#69F0AE',               pct: cmdShownBack > 0 ? cmdShowbackHC    / cmdShownBack * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _coverageDepts.some(d=>(r[d.key]||0)!==0)) },
+              { label: 'Consumption', amount: cmdShowbackCon,   color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackCon   / cmdShownBack * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
+              { label: 'Con → CB',    amount: cmdShowbackConCB, color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackConCB / cmdShownBack * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
             ],
           },
           {
@@ -906,8 +907,16 @@ export default function TechnologyShowbackDashboard() {
             ],
           },
         ];
+        const expandItem = cmdExpandLabel ? tiles[1].breakdown?.find(b => b.label === cmdExpandLabel) : null;
+        const expandDepts = expandItem ? DEPTS.map(d => ({
+          ...d,
+          amount: expandItem.rows.reduce((s, r) => s + (r[d.key] || 0), 0),
+          deptRows: expandItem.rows.filter(r => (r[d.key] || 0) !== 0),
+        })).filter(d => d.amount > 0).sort((a, b) => b.amount - a.amount) : [];
+        const expandMax = expandDepts[0]?.amount || 1;
         return (
-          <div style={{ background: '#004C8C', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+          <>
+          <div style={{ background: '#004C8C', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: cmdExpandLabel ? 'none' : '1px solid rgba(255,255,255,.08)' }}>
             {tiles.map((c, i) => (
               <div key={i} style={{ padding: '14px 28px', borderRight: i < tiles.length - 1 ? '1px solid rgba(255,255,255,.25)' : 'none' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -930,8 +939,11 @@ export default function TechnologyShowbackDashboard() {
                       }}>
                         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.6)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
                         <div
-                          onClick={() => setHeroModal({ section: row.section, title: row.label, note: `${row.pct.toFixed(1)}%`, rows: row.rows, total: row.amount })}
-                          style={{ fontSize: 17, fontWeight: 700, color: row.color, letterSpacing: '-0.5px', lineHeight: 1, marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+                          onClick={() => row.expandByDept
+                            ? setCmdExpandLabel(cmdExpandLabel === row.label ? null : row.label)
+                            : setHeroModal({ section: row.section, title: row.label, note: `${row.pct.toFixed(1)}%`, rows: row.rows, total: row.amount })
+                          }
+                          style={{ fontSize: 17, fontWeight: 700, color: cmdExpandLabel === row.label ? '#00ABBD' : row.color, letterSpacing: '-0.5px', lineHeight: 1, marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                         >{cadShort(row.amount)}</div>
                         <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 5, background: row.color === '#69F0AE' ? 'rgba(105,240,174,.15)' : 'rgba(255,255,255,.1)', color: row.color, display: 'inline-block', whiteSpace: 'nowrap' }}>
                           {row.pct.toFixed(1)}%
@@ -951,6 +963,29 @@ export default function TechnologyShowbackDashboard() {
               </div>
             ))}
           </div>
+          {expandItem && (
+            <div style={{ background: '#004C8C', borderTop: '1px solid rgba(255,255,255,.2)', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 28px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 10 }}>
+                {cmdExpandLabel} — By Department
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {expandDepts.map(d => (
+                  <div key={d.key} style={{ background: 'rgba(255,255,255,.08)', borderRadius: 6, padding: '10px 14px', minWidth: 110, flex: '0 0 auto' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.55)', marginBottom: 4, whiteSpace: 'nowrap' }}>{d.label}</div>
+                    <div
+                      onClick={() => setHeroModal({ section: cmdExpandLabel, title: d.label, note: `${pct(d.amount, expandItem.amount)}`, rows: d.deptRows, total: d.amount, rowAmt: r => r[d.key] || 0 })}
+                      style={{ fontSize: 16, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3, marginBottom: 6 }}
+                    >{cadShort(d.amount)}</div>
+                    <div style={{ height: 4, background: 'rgba(255,255,255,.15)', borderRadius: 2, marginBottom: 4 }}>
+                      <div style={{ height: '100%', borderRadius: 2, background: '#00ABBD', width: `${d.amount / expandMax * 100}%` }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,.55)' }}>{pct(d.amount, expandItem.amount)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         );
       })()}
 
