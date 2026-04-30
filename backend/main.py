@@ -51,6 +51,11 @@ with engine.connect() as _c:
         _c.commit()
     except Exception:
         _c.rollback()
+    try:
+        _c.execute(_sql_text("ALTER TABLE users ADD COLUMN overview_mode TEXT DEFAULT 'viewer'"))
+        _c.commit()
+    except Exception:
+        _c.rollback()
     # share_configs table (create if missing — idempotent via metadata)
     try:
         _c.execute(_sql_text("SELECT id FROM share_configs LIMIT 1"))
@@ -290,6 +295,7 @@ async def create_user(request: Request, user_in: UserCreate,
         allowed_gl_codes=user_in.allowed_gl_codes,
         allowed_branches=user_in.allowed_branches,
         allowed_departments=user_in.allowed_departments,
+        overview_mode=user_in.overview_mode,
     )
     db.add(user); db.commit(); db.refresh(user)
     log_access(db, current_user.email, "create_user", user.email,

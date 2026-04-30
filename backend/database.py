@@ -25,6 +25,7 @@ class User(Base):
     allowed_gl_codes    = Column(JSON, default=list)
     allowed_branches    = Column(JSON, default=list)
     allowed_departments = Column(JSON, default=list)
+    overview_mode       = Column(String, default='viewer')  # 'viewer'|'executive'|'admin'
     created_at    = Column(DateTime, default=datetime.utcnow)
     updated_at    = Column(DateTime, default=datetime.utcnow)
 

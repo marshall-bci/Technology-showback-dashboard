@@ -6,6 +6,7 @@ export default defineConfig({
   build: { outDir: '../dist' },
   server: {
     port: 5173,
+    host: true,
     proxy: {
       '/api':   'http://localhost:8000',
       '/auth':  'http://localhost:8000',

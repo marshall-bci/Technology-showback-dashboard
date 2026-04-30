@@ -31,9 +31,18 @@ start "Vite Frontend" cmd /k "npm run dev"
 
 timeout /t 4 /nobreak >nul
 
+REM ── Allow port 5173 through Windows Firewall (no-op if rule already exists) ─
+netsh advfirewall firewall add rule name="Showback Dashboard (5173)" dir=in action=allow protocol=TCP localport=5173 >nul 2>&1
+
 REM ── Open browser ─────────────────────────────────────────────────────────
 echo.
-echo  Dashboard is starting at: http://localhost:5173
+echo  ============================================================
+echo   YOUR URL (this laptop):   http://localhost:5173
+echo   SHARE WITH OTHERS:        http://192.168.243.127:5173
+echo  ============================================================
+echo.
+echo  Login link for a guest (replace email as needed):
+echo    http://192.168.243.127:5173/auth/dev-login?email=USER@bci.ca
 echo.
 start http://localhost:5173
 

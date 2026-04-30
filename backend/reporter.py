@@ -154,28 +154,22 @@ def generate_dept_pdf(rows: list[dict], department: str, period: str) -> bytes:
 
     # ── Helper: progress bar (coloured segments) ──────────────────────────────
     def _bar(segments, max_val, bar_total_w, height=12):
-        """segments = [(amount, color), ...]"""
-        if max_val == 0:
-            return Table([['']], colWidths=[bar_total_w], rowHeights=[height])
-        cells = []
-        widths = []
+        """segments = [(amount, color), ...] — single Table, no nesting."""
+        if not max_val:
+            return Spacer(1, height)
+        cells, widths, bg = [], [], []
+        col_idx = 0
         for amt, col in segments:
-            w = max(bar_total_w * amt / max_val, 0)
-            if w > 0:
-                t = Table([['']], colWidths=[w], rowHeights=[height])
-                t.setStyle(TableStyle([
-                    ('BACKGROUND',    (0,0),(-1,-1), col),
-                    ('TOPPADDING',    (0,0),(-1,-1), 0),
-                    ('BOTTOMPADDING', (0,0),(-1,-1), 0),
-                    ('LEFTPADDING',   (0,0),(-1,-1), 0),
-                    ('RIGHTPADDING',  (0,0),(-1,-1), 0),
-                ]))
-                cells.append(t)
+            w = bar_total_w * amt / max_val
+            if w >= 1:
+                cells.append('')
                 widths.append(w)
+                bg.append(('BACKGROUND', (col_idx, 0), (col_idx, 0), col))
+                col_idx += 1
         if not cells:
-            return Table([['']], colWidths=[bar_total_w], rowHeights=[height])
-        bar = Table([cells], colWidths=widths)
-        bar.setStyle(TableStyle([
+            return Spacer(1, height)
+        bar = Table([cells], colWidths=widths, rowHeights=[height])
+        bar.setStyle(TableStyle(bg + [
             ('TOPPADDING',    (0,0),(-1,-1), 0),
             ('BOTTOMPADDING', (0,0),(-1,-1), 0),
             ('LEFTPADDING',   (0,0),(-1,-1), 0),
@@ -184,8 +178,12 @@ def generate_dept_pdf(rows: list[dict], department: str, period: str) -> bytes:
         return bar
 
     # ── Two summary cards ─────────────────────────────────────────────────────
-    card_w  = (cw - 10) / 2
-    bar_w_card = card_w - 32
+    card_w    = (cw - 10) / 2
+    card_pad  = 16                   # _wrap_card left+right padding each side
+    inner_w   = card_w - 2 * card_pad   # usable width inside the card
+    bar_w_card = inner_w             # bar spans full inner width
+    pct_col_w = 60                   # right column for percentage labels
+    lbl_col_w = inner_w - pct_col_w  # left column
 
     # Card 1 — Shown back to business
     shown_pct_of_tech = shown_amt / total_tech * 100 if total_tech else 0
@@ -207,7 +205,7 @@ def generate_dept_pdf(rows: list[dict], department: str, period: str) -> bytes:
          _p(_pct(shown_amt, total_dept),
             S('pct1b', fontName='Helvetica-Bold', fontSize=9, textColor=SLATE, leading=12, alignment=2))],
     ]
-    c1 = Table(card1_inner, colWidths=[card_w - 80, 70])
+    c1 = Table(card1_inner, colWidths=[lbl_col_w, pct_col_w])
     c1.setStyle(TableStyle([
         ('SPAN',          (0,1),(1,1)),
         ('SPAN',          (0,2),(1,2)),
@@ -237,7 +235,7 @@ def generate_dept_pdf(rows: list[dict], department: str, period: str) -> bytes:
          _p(f"{con_cb_pct:.1f}%",
             S('pct2', fontName='Helvetica-Bold', fontSize=9, textColor=SLATE, leading=12, alignment=2))],
     ]
-    c2 = Table(card2_inner, colWidths=[card_w - 80, 70])
+    c2 = Table(card2_inner, colWidths=[lbl_col_w, pct_col_w])
     c2.setStyle(TableStyle([
         ('SPAN',          (0,1),(1,1)),
         ('SPAN',          (0,2),(1,2)),

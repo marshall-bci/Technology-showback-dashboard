@@ -168,22 +168,32 @@ async def callback(request: Request, db: Session = Depends(get_db)):
     return response
 
 
-def _logout_response():
-    response = RedirectResponse(FRONTEND_URL, status_code=302)
+def _safe_redirect(next_url: str | None) -> str:
+    """Return next_url if it looks like a local origin, else fall back to FRONTEND_URL."""
+    if next_url:
+        from urllib.parse import urlparse
+        h = urlparse(next_url).hostname or ""
+        if h in ("localhost", "127.0.0.1") or h.startswith("192.168.") or h.startswith("10.") or h.startswith("172."):
+            return next_url
+    return FRONTEND_URL
+
+
+def _logout_response(next_url: str | None = None):
+    response = RedirectResponse(_safe_redirect(next_url), status_code=302)
     response.delete_cookie("access_token", path="/")
     return response
 
 @router.get("/logout")
-async def logout_get():
-    return _logout_response()
+async def logout_get(next: str | None = None):
+    return _logout_response(next)
 
 @router.post("/logout")
-async def logout_post():
-    return _logout_response()
+async def logout_post(next: str | None = None):
+    return _logout_response(next)
 
 
 @router.get("/dev-login")
-async def dev_login(email: str = "testadmin@bci.ca", db: Session = Depends(get_db)):
+async def dev_login(email: str = "testadmin@bci.ca", next: str | None = None, db: Session = Depends(get_db)):
     """Local dev only — bypasses SSO. Pass ?email= to switch accounts."""
     if os.getenv("APP_ENV", "development") != "development":
         raise HTTPException(403, "Dev login is disabled in production")
@@ -191,7 +201,7 @@ async def dev_login(email: str = "testadmin@bci.ca", db: Session = Depends(get_d
     if not user:
         raise HTTPException(404, f"{email} not found or inactive. Run: python init_admin.py {email}")
     token_str = create_jwt(user)
-    response = RedirectResponse(f"{FRONTEND_URL}?auth_success=1", status_code=302)
+    response = RedirectResponse(f"{_safe_redirect(next)}?auth_success=1", status_code=302)
     response.set_cookie("access_token", token_str, httponly=True, samesite="lax",
                         max_age=JWT_EXPIRE * 60)
     return response
@@ -207,4 +217,5 @@ async def me(current_user: User = Depends(get_current_user)):
         "allowed_gl_codes":       current_user.allowed_gl_codes    or [],
         "allowed_branches":       current_user.allowed_branches    or [],
         "allowed_departments":    current_user.allowed_departments or [],
+        "overview_mode":          current_user.overview_mode or 'viewer',
     }

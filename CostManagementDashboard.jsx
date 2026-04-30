@@ -129,7 +129,8 @@ const exportToExcel = async (endpoint, filename) => {
 const TT   = { fontFamily: "'Open Sans', Calibri, sans-serif", fontSize: 12 };
 const card = (extra = {}) => ({
   background: 'white', borderRadius: 8,
-  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+  border: '1px solid rgba(0,0,0,0.06)',
   ...extra,
 });
 
@@ -941,7 +942,7 @@ export default function TechnologyShowbackDashboard() {
           });
           const belowThresholdTotal = belowThresholdRows.reduce((s, r) => s + (_deptRowAmt ? _deptRowAmt(r) : DEPTS.reduce((ds, d) => ds + (r[d.key] || 0), 0)), 0);
           const selDeptInfo  = selectedDept ? DEPTS.find(d => d.key === selectedDept) : null;
-          const selDeptRows  = selectedDept ? filtered.filter(r => _isApproachRow(r) && (r[selectedDept] || 0) > 0 && (_deptRestrictedKeys ? !(r.showbackType || '').toLowerCase().startsWith('no showback') : true)) : [];
+          const selDeptRows  = selectedDept ? filtered.filter(r => _isApproachRow(r) && (r[selectedDept] || 0) > 0 && (_deptRestrictedKeys ? !_isDirectCB(r) : true)) : [];
           const selMethodAmt = (test) => selDeptRows.filter(r => test(r)).reduce((s, r) => s + (r[selectedDept] || 0), 0);
           const _isCbCm = r => (r.currentCostModel || '').toLowerCase().includes('chargeback') && !((r.showbackType||'').toLowerCase().startsWith('no showback'));
           const selHcTotal    = selMethodAmt(r => (r.showbackType || '').toLowerCase().includes('headcount') && (_deptRestrictedKeys ? !_isCbCm(r) : true));
@@ -981,17 +982,7 @@ export default function TechnologyShowbackDashboard() {
                 return st.includes('consumption') && st.includes('chargeback') && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
             },
-            ...(_deptRestrictedKeys ? [{
-              name: 'Direct Chargeback',
-              badge: 'LOB-specific',
-              color: '#DC642B',
-              meta: 'Hard-charged to owning LOB · confirmation required each cycle',
-              rows: filtered.filter(r => {
-                const cm = (r.currentCostModel || '').toLowerCase();
-                const st = (r.showbackType || '').toLowerCase();
-                return cm.includes('chargeback') && !st.startsWith('no showback') && _deptRestrictedKeys.some(d => (r[d.key] || 0) !== 0);
-              }),
-            }] : [{
+            ...(!_deptRestrictedKeys ? [{
               name: 'Direct Chargeback',
               badge: 'LOB-specific',
               color: '#DC642B',
@@ -1002,7 +993,7 @@ export default function TechnologyShowbackDashboard() {
                 return (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount')))
                   && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
-            }]),
+            }] : []),
           ];
           return (
           <div>
@@ -1060,7 +1051,7 @@ export default function TechnologyShowbackDashboard() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Cost by Showback Type</div>
                 <div style={{ fontSize: 13, color: '#696F78', marginBottom: 16 }}>{periodLabel}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                  <div style={{ flexShrink: 0, width: 168, height: 168 }} onMouseLeave={() => setHoveredSegment(null)}>
+                  <div style={{ flexShrink: 0, width: 168, height: 168, position: 'relative' }} onMouseLeave={() => setHoveredSegment(null)}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -1096,6 +1087,10 @@ export default function TechnologyShowbackDashboard() {
                         <Tooltip formatter={(v) => cad(v)} contentStyle={TT} />
                       </PieChart>
                     </ResponsiveContainer>
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{cadShort(_deptTotal)}</div>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.2px', color: '#8A929C', textTransform: 'uppercase', marginTop: 2 }}>TOTAL</div>
+                    </div>
                   </div>
                   {/* BCI-style legend — hover here also focuses the donut */}
                   <div style={{ flex: 1, fontSize: 13 }}>
@@ -1139,7 +1134,7 @@ export default function TechnologyShowbackDashboard() {
                 How the {cadShort(cmdShownBack)} shown back is distributed across the four active allocation methods
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(4, 1fr)`, gap: 14, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${_deptRestrictedKeys ? 3 : 4}, 1fr)`, gap: 14, marginBottom: 20 }}>
               {approaches.map((ap, i) => {
                 const apTotal = ap.rows.reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
                 const apBase  = filtered.reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
@@ -3128,7 +3123,7 @@ export default function TechnologyShowbackDashboard() {
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginBottom: 3 }}>{heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0))(r) !== 0).length} line items</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginBottom: 3 }}>{heroModal.rows.filter(r => Math.round((heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0))(r)) !== 0).length} line items</div>
                   <div style={{ fontSize: 24, fontWeight: 700, color: CYAN, letterSpacing: '-0.5px' }}>{cad(heroModal.total)}</div>
                 </div>
                 <button
@@ -3153,7 +3148,7 @@ export default function TechnologyShowbackDashboard() {
                 <tbody>
                   {(() => {
                     const getAmt = heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0);
-                    const visibleRows = [...heroModal.rows].filter(r => getAmt(r) !== 0).sort((a, b) => getAmt(b) - getAmt(a));
+                    const visibleRows = [...heroModal.rows].filter(r => Math.round(getAmt(r)) !== 0).sort((a, b) => getAmt(b) - getAmt(a));
                     return visibleRows.map((r, i) => (
                       <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#FAFBFC', borderBottom: '1px solid #F0F0F0' }}>
                         <td style={{ padding: '9px 16px', color: '#2C2C2C', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.description || r.pid}>{r.description || r.pid || '—'}</td>
@@ -3167,7 +3162,7 @@ export default function TechnologyShowbackDashboard() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#EEF2F7', borderTop: '2px solid #D0DAE8' }}>
-                    <td colSpan={4} style={{ padding: '11px 16px', fontWeight: 700, color: NAVY, fontSize: 12 }}>Total — {heroModal.rows.filter(r => (heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0))(r) !== 0).length} items</td>
+                    <td colSpan={4} style={{ padding: '11px 16px', fontWeight: 700, color: NAVY, fontSize: 12 }}>Total — {heroModal.rows.filter(r => Math.round((heroModal.rowAmt || (r => r[heroModal.amtKey || period] || 0))(r)) !== 0).length} items</td>
                     <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: NAVY, fontSize: 13 }}>{cad(heroModal.total)}</td>
                   </tr>
                 </tfoot>
