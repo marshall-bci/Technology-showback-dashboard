@@ -106,6 +106,16 @@ class OcRawRow(Base):
     budget    = Column(Float, default=0.0)
 
 
+class DeptTechCostEntry(Base):
+    __tablename__ = "dept_tech_cost"
+    id         = Column(Integer, primary_key=True)
+    dept_label = Column(String, default="")   # cleaned name e.g. "CEO", "Department_Attr"
+    actuals    = Column(Float, default=0.0)   # FY2026 actual  (stored in dollars)
+    budget     = Column(Float, default=0.0)   # FY2026 budget
+    forecast1  = Column(Float, default=0.0)   # FY2027
+    forecast2  = Column(Float, default=0.0)   # FY2028
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
     key   = Column(String, primary_key=True)

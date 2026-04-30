@@ -2,7 +2,7 @@ import io
 import re
 from openpyxl import load_workbook
 from sqlalchemy.orm import Session
-from database import CostModelEntry, HeadcountEntry, UserListingEntry, OcRawRow
+from database import CostModelEntry, HeadcountEntry, UserListingEntry, OcRawRow, DeptTechCostEntry
 
 
 def parse_workbook(file_bytes: bytes, db: Session, update_refs: bool = False) -> dict:
@@ -45,6 +45,11 @@ def parse_workbook(file_bytes: bytes, db: Session, update_refs: bool = False) ->
             _load_user_listing(ul_ws, db)
 
     _load_oc_data(oc_ws, db)
+
+    dtc_ws = next((wb[n] for n in wb.sheetnames if 'department technology cost' in n.lower()), None)
+    if dtc_ws:
+        _load_dept_tech_cost(dtc_ws, db)
+
     wb.close()
 
     from allocator import run_allocation_all_periods
@@ -270,6 +275,57 @@ def _load_oc_data(ws, db):
         db.add(OcRawRow(oc_cell=str(val).strip(),
                         actuals=actuals, budget=budget, forecast1=f1, forecast2=f2))
 
+    db.commit()
+
+
+def _load_dept_tech_cost(ws, db):
+    """Parse the 'Department Technology Cost' sheet.
+
+    Expected layout (same format as the user's GL 50401 export):
+      Rows 1-3: header / label rows — skipped automatically.
+      Col A:    dept label  e.g. "Technology-50401 : Systems Operation" or "Department_Attr"
+      Col B:    FY actuals  (values in thousands of dollars)
+      Col C:    FY budget
+      Col D:    FY+1 forecast
+      Col E:    FY+2 forecast
+    Values are multiplied × 1000 on storage so they align with the rest of the
+    dashboard which works in raw dollars.
+    """
+    _skip = {
+        "unallocated", "general", "corporate & investor relations",
+        "department_attr (uncategorized)",
+    }
+
+    def _n(v):
+        if v is None:
+            return None
+        try:
+            return float(str(v).replace(',', ''))
+        except (ValueError, TypeError):
+            return None
+
+    db.query(DeptTechCostEntry).delete()
+    for row in ws.iter_rows(min_row=1, values_only=True):
+        if not row or not row[0]:
+            continue
+        raw_label = str(row[0]).strip()
+        # Split off "-50401 : Systems Operation" suffix
+        clean = raw_label.split("-50401")[0].strip()
+        if clean.lower() in _skip:
+            continue
+        actuals = _n(row[1] if len(row) > 1 else None)
+        if actuals is None:
+            continue  # header or non-numeric row — skip
+        budget    = _n(row[2] if len(row) > 2 else None) or 0.0
+        forecast1 = _n(row[3] if len(row) > 3 else None) or 0.0
+        forecast2 = _n(row[4] if len(row) > 4 else None) or 0.0
+        db.add(DeptTechCostEntry(
+            dept_label=clean,
+            actuals=actuals * 1000,
+            budget=budget * 1000,
+            forecast1=forecast1 * 1000,
+            forecast2=forecast2 * 1000,
+        ))
     db.commit()
 
 

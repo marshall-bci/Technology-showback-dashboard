@@ -153,10 +153,11 @@ export default function TechnologyShowbackDashboard() {
   const [authError,    setAuthError]    = useState('');
 
   // ── Data ────────────────────────────────────────────────────────────────────
-  const [rows,       setRows]       = useState([]);
-  const [updatedAt,  setUpdatedAt]  = useState(null);
-  const [sheetName,  setSheetName]  = useState(null);
-  const [serverOk,   setServerOk]   = useState(true);
+  const [rows,          setRows]          = useState([]);
+  const [updatedAt,     setUpdatedAt]     = useState(null);
+  const [sheetName,     setSheetName]     = useState(null);
+  const [serverOk,      setServerOk]      = useState(true);
+  const [deptTechCost,  setDeptTechCost]  = useState(null);
 
   // ── UI ──────────────────────────────────────────────────────────────────────
   const [activeTab,       setActiveTab]       = useState('overview');
@@ -247,6 +248,19 @@ export default function TechnologyShowbackDashboard() {
       .catch(() => setAuthChecked(true));
   }, []);
 
+  // ── Fetch dept tech cost (BCI landscape) ────────────────────────────────────
+  const fetchDeptTechCost = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/dept-tech-cost`, { credentials: 'include' });
+      if (res.ok) setDeptTechCost(await res.json());
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchDeptTechCost();
+  }, [user, fetchDeptTechCost]);
+
   // ── Fetch cost data ─────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
@@ -293,6 +307,7 @@ export default function TechnologyShowbackDashboard() {
         const refNote = data.refsUpdated ? ' (reference tables refreshed)' : '';
         setUploadStatus(`✓ ${data.rowCount} rows calculated${refNote}.`);
         fetchData();
+        fetchDeptTechCost();
       } else {
         const err = await res.json().catch(() => ({}));
         setUploadStatus(`Error: ${err.detail || err.error || res.status}`);
@@ -546,9 +561,6 @@ export default function TechnologyShowbackDashboard() {
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
     .reduce((s, r) => s + _rowValue(r), 0);
   const cmdCoveragePct  = cmdCoverageBase > 0 ? Math.min(cmdShownBack / cmdCoverageBase * 100, 100) : 0;
-  const fy27Base        = filtered.reduce((s, r) => s + (r.forecast1 || 0), 0);
-  const fy27ShownBack   = filtered.filter(r => _isShowbackRow(r)).reduce((s, r) => s + (r.forecast1 || 0), 0);
-  const fy27CoveragePct = fy27Base > 0 ? Math.min(fy27ShownBack / fy27Base * 100, 100) : 0;
   const cmdVariance            = totalBudget - totalPeriod;
   const showNotShownBackPanel  = !(user?.allowed_departments?.length) || user.allowed_departments.includes('Technology');
   const cmdTotalFlags     = rows.filter(r => r.comments).length;
@@ -775,10 +787,81 @@ export default function TechnologyShowbackDashboard() {
         </div>
       </div>
 
+      {/* ── BCI Technology Cost Landscape ─────────────────────────────────────── */}
+      {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && deptTechCost?.loaded && (() => {
+        const bciTotal    = deptTechCost.total.actuals;
+        const bciTotalBgt = deptTechCost.total.budget;
+        const techActuals = deptTechCost.technology.actuals;
+        const techBudget  = deptTechCost.technology.budget;
+        const exclActuals = bciTotal - techActuals;
+        const exclBudget  = bciTotalBgt - techBudget;
+        const tile = (extra = {}) => ({
+          padding: '14px 28px', borderRight: '1px solid rgba(255,255,255,.08)', ...extra,
+        });
+        const varPill = (budget, actual) => (
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: 'rgba(105,240,174,.15)', color: '#69F0AE' }}>
+            ▼ {cadShort(budget - actual)} under budget
+          </span>
+        );
+        const allocationBar = (share, total) => (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.5)' }}>Budget Allocation</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'white' }}>
+                {(share / total * 100).toFixed(1)}%{' '}
+                <span style={{ fontWeight: 400, color: 'rgba(255,255,255,.5)', fontSize: 10 }}>of {cadShort(total)} BCI budget</span>
+              </span>
+            </div>
+            <div style={{ height: 4, background: 'rgba(255,255,255,.12)', borderRadius: 2 }}>
+              <div style={{ height: '100%', background: 'rgba(255,255,255,.6)', borderRadius: 2, width: `${Math.min(share / total * 100, 100)}%` }} />
+            </div>
+          </div>
+        );
+        return (
+          <div style={{ background: '#002847', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div style={tile()}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Total BCI Technology Cost · FY{baseYear} Actual</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'white', letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{cadShort(bciTotal)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {varPill(bciTotalBgt, bciTotal)}
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(bciTotalBgt)} budget</span>
+              </div>
+            </div>
+            <div style={tile()}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Excl. Technology Department</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: '#69F0AE', letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{cadShort(exclActuals)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {varPill(exclBudget, exclActuals)}
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(exclBudget)} budget</span>
+              </div>
+              {allocationBar(exclBudget, bciTotalBgt)}
+            </div>
+            <div style={tile({ borderRight: 'none' })}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Technology Department · Central Budget</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'white', letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{cadShort(techActuals)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {varPill(techBudget, techActuals)}
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(techBudget)} budget</span>
+              </div>
+              {allocationBar(techBudget, bciTotalBgt)}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Technology Breakdown separator ─────────────────────────────────────── */}
+      {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && deptTechCost?.loaded && (
+        <div style={{ background: 'linear-gradient(to bottom, #002847, #003460)', padding: '6px 28px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.2)' }} />
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,.35)' }}>Technology Breakdown</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.2)' }} />
+        </div>
+      )}
+
       {/* ── Command strip (Overview only) ────────────────────────────────────── */}
       {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && (
         <div style={{
-          background: '#002847',
+          background: '#003460',
           display: 'grid',
           gridTemplateColumns: showNotShownBackPanel ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
           borderBottom: '1px solid rgba(255,255,255,.08)',
@@ -805,11 +888,12 @@ export default function TechnologyShowbackDashboard() {
               pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
             },
             ...(showNotShownBackPanel ? [{
-              label:     'Not Shown Back · Breakdown',
+              label:     `Technology ${cadShort(totalPeriod)} · Breakdown`,
               breakdown: [
-                { label: 'No Showback',          amount: cmdNoShowback,         color: 'rgba(255,255,255,.85)', note: 'Intentional',    section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                { label: "Technology's Portion", amount: cmdNoShowbackTech,     color: 'rgba(255,255,255,.85)', note: 'Tech-specific',  section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
-                { label: 'Not Configured',       amount: cmdNotConfigured,      color: '#FFD54F',               note: 'Needs decision', section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+                { label: 'Total Showback', amount: cmdShownBack,      color: '#69F0AE',               pct: cmdCoveragePct,                                              separator: true,  section: 'Shown Back',     rows: filtered.filter(r => _isShowbackRow(r) && _coverageDepts.some(d => (r[d.key]||0) !== 0)) },
+                { label: 'Tech Absorbed',  amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech / totalPeriod * 100 : 0, separator: false, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
+                { label: 'Tech Owned',     amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback    / totalPeriod * 100 : 0, separator: false, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+                { label: 'Not Configured', amount: cmdNotConfigured,  color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured  / totalPeriod * 100 : 0, separator: false, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
               ],
             }] : []),
           ].map((c, i) => (
@@ -822,16 +906,23 @@ export default function TechnologyShowbackDashboard() {
               </div>
               {c.breakdown ? (
                 <div>
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 6 }}>
+                  <div style={{ display: 'flex', gap: 0, marginBottom: 6 }}>
                     {c.breakdown.map((row, j) => (
-                      <div key={j} style={{ flex: 1, borderRight: j < c.breakdown.length - 1 ? '1px solid rgba(255,255,255,.07)' : 'none', paddingRight: j < c.breakdown.length - 1 ? 16 : 0 }}>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
+                      <div key={j} style={{
+                        flex: 1,
+                        paddingRight: j < c.breakdown.length - 1 ? 12 : 0,
+                        paddingLeft: j > 0 ? 12 : 0,
+                        borderRight: j < c.breakdown.length - 1
+                          ? (row.separator ? '2px solid rgba(255,255,255,.25)' : '1px solid rgba(255,255,255,.07)')
+                          : 'none',
+                      }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.6)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
                         <div
-                          onClick={() => setHeroModal({ section: row.section, title: row.label, note: row.note, rows: row.rows, total: row.amount })}
-                          style={{ fontSize: 20, fontWeight: 700, color: row.color, letterSpacing: '-0.5px', marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+                          onClick={() => setHeroModal({ section: row.section, title: row.label, note: `${row.pct.toFixed(1)}%`, rows: row.rows, total: row.amount })}
+                          style={{ fontSize: 17, fontWeight: 700, color: row.color, letterSpacing: '-0.5px', lineHeight: 1, marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                         >{cadShort(row.amount)}</div>
-                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,255,255,.1)', color: row.color, whiteSpace: 'nowrap' }}>
-                          {row.note}
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 5, background: row.color === '#69F0AE' ? 'rgba(105,240,174,.15)' : 'rgba(255,255,255,.1)', color: row.color, display: 'inline-block', whiteSpace: 'nowrap' }}>
+                          {row.pct.toFixed(1)}%
                         </span>
                       </div>
                     ))}
@@ -1029,20 +1120,6 @@ export default function TechnologyShowbackDashboard() {
                       is actively shown back or charged to LOBs.</>
                     )}
                   </div>
-                  {!_deptRestrictedKeys && (() => {
-                    const pct = fy27Base > 0 ? fy27CoveragePct : cmdCoveragePct;
-                    const yr  = fy27Base > 0 ? baseYear + 1 : baseYear;
-                    return (
-                      <div style={{
-                        display: 'inline-block', marginTop: 10,
-                        fontSize: 13, fontWeight: 600, padding: '4px 10px', borderRadius: 4,
-                        background: pct >= 70 ? '#E8F5E9' : pct >= 50 ? '#FFF8E1' : '#FFEBEE',
-                        color:      pct >= 70 ? '#2E7D32' : pct >= 50 ? '#E65100' : '#C62828',
-                      }}>
-                        {`FY${yr} — ${pct.toFixed(1)}% shown back`}
-                      </div>
-                    );
-                  })()}
                 </div>
               </div>
 
@@ -1867,6 +1944,7 @@ export default function TechnologyShowbackDashboard() {
                 </div>
               )}
             </div>
+
           </div>
         )}
 

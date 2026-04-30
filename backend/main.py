@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 
 from auth import router as auth_router, get_current_user, require_admin
-from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry, AppSetting, ShareConfig
+from database import engine, Base, get_db, User, AccessLog, CostModelEntry, HeadcountEntry, UserListingEntry, AppSetting, ShareConfig, DeptTechCostEntry
 from models import UserCreate, UserUpdate, UserResponse, LogEntry
 from permissions import filter_for_user
 from parser import parse_workbook
@@ -62,6 +62,13 @@ with engine.connect() as _c:
     except Exception:
         _c.rollback()
         Base.metadata.tables['share_configs'].create(bind=engine)
+        _c.commit()
+    # dept_tech_cost table (create if missing)
+    try:
+        _c.execute(_sql_text("SELECT id FROM dept_tech_cost LIMIT 1"))
+    except Exception:
+        _c.rollback()
+        Base.metadata.tables['dept_tech_cost'].create(bind=engine)
         _c.commit()
 
 # ── Production safety checks ──────────────────────────────────────────────────
@@ -254,6 +261,30 @@ async def upload_file(request: Request, file: UploadFile = File(...),
                 "update_refs": update_refs})
     return {"ok": True, "rowCount": len(rows), "sheetName": sheet_name,
             "refsUpdated": update_refs or result.get("refs_empty", False)}
+
+
+@app.get("/api/dept-tech-cost")
+async def get_dept_tech_cost(current_user: User = Depends(get_current_user),
+                             db: Session = Depends(get_db)):
+    rows = db.query(DeptTechCostEntry).all()
+    if not rows:
+        return {"loaded": False}
+    total = next((r for r in rows if r.dept_label == "Department_Attr"), None)
+    tech  = next((r for r in rows if r.dept_label == "Technology"), None)
+    _skip = {"Department_Attr", "Unallocated", "General",
+             "Corporate & Investor Relations", "Department_Attr (Uncategorized)"}
+    dept_rows = sorted(
+        [r for r in rows if r.dept_label not in _skip and abs(r.actuals) > 0.1],
+        key=lambda r: r.actuals, reverse=True,
+    )
+    def _s(r):
+        return {"actuals": r.actuals, "budget": r.budget, "forecast1": r.forecast1, "forecast2": r.forecast2} if r else {}
+    return {
+        "loaded":      True,
+        "total":       _s(total),
+        "technology":  _s(tech),
+        "departments": [{"dept_label": r.dept_label, **_s(r)} for r in dept_rows],
+    }
 
 
 @app.post("/api/push")
