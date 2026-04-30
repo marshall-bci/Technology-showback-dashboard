@@ -1088,7 +1088,7 @@ export default function TechnologyShowbackDashboard() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{cadShort(_deptTotal)}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{cadShort(showbackPieData.reduce((s, e) => s + e.value, 0))}</div>
                       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.2px', color: '#8A929C', textTransform: 'uppercase', marginTop: 2 }}>TOTAL</div>
                     </div>
                   </div>
