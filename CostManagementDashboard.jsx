@@ -486,8 +486,9 @@ export default function TechnologyShowbackDashboard() {
   const totalActuals = filtered.reduce((s, r) => s + r.actuals, 0);
   const totalBudget  = filtered.reduce((s, r) => s + r.budget, 0);
   const _isTechPortion = r => (r.showbackType || '').toLowerCase().includes("technology's portion");
+  const _isDCB = r => { const st = (r.showbackType||'').toLowerCase(); const cm = (r.currentCostModel||'').toLowerCase(); return st !== 'no showback' && (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount'))) && DEPTS.some(d => (r[d.key]||0) !== 0); };
   const techActuals  = filteredRaw
-    .filter(_isTechPortion)
+    .filter(r => _isTechPortion(r) && !_isDCB(r))
     .reduce((s, r) => s + (r[period] || 0), 0);
   const flaggedCount = filtered.filter(r => r.comments).length;
 
@@ -506,12 +507,16 @@ export default function TechnologyShowbackDashboard() {
         if (stl.startsWith('no showback')) return acc;
         if (cm.includes('chargeback') && !stl.startsWith('no showback')) st = 'Direct Chargeback';
       }
+      // Recategorize Technology's Portion rows that are Direct Chargeback
+      if (_isTechPortion(r) && _isDCB(r)) st = 'Direct Chargeback';
       // Exclude showback rows with no dept allocation yet (pending User Listing)
       if (stl.startsWith('showback') && DEPTS.every(d => (r[d.key] || 0) === 0)) return acc;
-      acc[st] = (acc[st] || 0) + _rowValue(r);
+      if (!acc[st]) acc[st] = { value: 0, rows: [] };
+      acc[st].value += _rowValue(r);
+      acc[st].rows.push(r);
       return acc;
     }, {})
-  ).map(([name, value]) => ({ name, value }))
+  ).map(([name, { value, rows }]) => ({ name, value, rows }))
    .sort((a, b) => b.value - a.value); // largest → smallest, clockwise from top
 
   const _isApproachRow = r => {
@@ -572,15 +577,18 @@ export default function TechnologyShowbackDashboard() {
   const showNotShownBackPanel  = !(user?.allowed_departments?.length) || user.allowed_departments.includes('Technology');
   const cmdTotalFlags     = rows.filter(r => r.comments).length;
   const cmdReadinessPct   = rows.length > 0 ? ((rows.length - cmdTotalFlags) / rows.length * 100) : 0;
-  // Not-shown-back breakdown — three distinct categories
+  // Not-shown-back breakdown — four distinct categories
   const cmdNoShowback     = filteredRaw
     .filter(r => (r.showbackType || '').toLowerCase() === 'no showback')
     .reduce((s, r) => s + (r[period] || 0), 0);
   const cmdNoShowbackTech = filteredRaw
-    .filter(r => (r.showbackType || '').toLowerCase().includes("technology's portion"))
+    .filter(r => _isTechPortion(r) && !_isDCB(r))
     .reduce((s, r) => s + (r[period] || 0), 0);
   const cmdNotConfigured  = filteredRaw
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none'; })
+    .reduce((s, r) => s + (r[period] || 0), 0);
+  const cmdDirectCB       = filteredRaw
+    .filter(r => _isDCB(r))
     .reduce((s, r) => s + (r[period] || 0), 0);
 
   const dynamicPeriods = [
@@ -867,7 +875,7 @@ export default function TechnologyShowbackDashboard() {
 
       {/* ── Command strip (Overview only) ────────────────────────────────────── */}
       {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && (() => {
-        const cmdTechNotShownBack = cmdNoShowbackTech + cmdNoShowback + cmdNotConfigured;
+        const cmdTechNotShownBack = cmdNoShowbackTech + cmdNoShowback + cmdNotConfigured + cmdDirectCB;
         const tiles = [
           {
             label:     'Total Spend · ' + periodLabel,
@@ -889,11 +897,12 @@ export default function TechnologyShowbackDashboard() {
             ],
           },
           {
-            label:    `Technology ${cadShort(cmdTechNotShownBack)} · Breakdown`,
+            label:    `Technology ${cadShort(cmdTechNotShownBack)} · Breakdown · No Showback`,
             breakdown: [
-              { label: 'Tech Absorbed',  amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
-              { label: 'Tech Owned',     amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback     / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-              { label: 'Not Configured', amount: cmdNotConfigured,  color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured  / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+              { label: 'Tech Absorbed',     amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isTechPortion(r) && !_isDCB(r)) },
+              { label: 'Tech Owned',        amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback     / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+              { label: 'Direct Chargeback', amount: cmdDirectCB,       color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdDirectCB       / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isDCB(r)) },
+              { label: 'Not Configured',    amount: cmdNotConfigured,  color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured  / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
             ],
           },
         ];
@@ -1072,7 +1081,7 @@ export default function TechnologyShowbackDashboard() {
               rows: filtered.filter(r => {
                 const st = (r.showbackType || '').toLowerCase();
                 const cm = (r.currentCostModel || '').toLowerCase();
-                return (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount')))
+                return st !== 'no showback' && (st === 'chargeback' || (cm.includes('chargeback') && !st.includes('consumption') && !st.includes('headcount')))
                   && DEPTS.some(d => (r[d.key] || 0) !== 0);
               }),
             }] : []),
@@ -1165,16 +1174,22 @@ export default function TechnologyShowbackDashboard() {
                     {showbackPieData.map((entry, i) => {
                       const isActive = hoveredSegment === entry.name;
                       const isDimmed = hoveredSegment !== null && !isActive;
+                      const displayName = entry.name.toLowerCase() === 'no showback'
+                        ? 'No Showback (Technology Owned)'
+                        : entry.name.toLowerCase().includes("technology's portion")
+                          ? 'No Showback (Technology Absorbed)'
+                          : entry.name;
                       return (
                         <div key={i}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9,
                             opacity: isDimmed ? 0.25 : 1,
                             transition: 'opacity 0.2s ease',
-                            cursor: 'default',
+                            cursor: 'pointer',
                           }}
                           onMouseEnter={() => setHoveredSegment(entry.name)}
                           onMouseLeave={() => setHoveredSegment(null)}
+                          onClick={() => setHeroModal({ section: 'Cost by Showback Type', title: displayName, note: `${pct(entry.value, totalPeriod)}`, rows: entry.rows, total: entry.value })}
                         >
                           <span style={{
                             width: 12, height: 12,
@@ -1183,7 +1198,7 @@ export default function TechnologyShowbackDashboard() {
                             transform: isActive ? 'scale(1.25)' : 'scale(1)',
                             transition: 'transform 0.2s ease',
                           }} />
-                          <span style={{ flex: 1, color: '#515254', fontWeight: isActive ? 700 : 400 }}>{entry.name}</span>
+                          <span style={{ flex: 1, color: '#515254', fontWeight: isActive ? 700 : 400 }}>{displayName}</span>
                           <span style={{ fontWeight: 700, color: NAVY, minWidth: 62, textAlign: 'right' }}>{cadShort(entry.value)}</span>
                           <span style={{ color: '#696F78', minWidth: 36, textAlign: 'right' }}>{pct(entry.value, totalPeriod)}</span>
                         </div>
