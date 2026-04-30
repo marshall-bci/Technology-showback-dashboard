@@ -561,6 +561,13 @@ export default function TechnologyShowbackDashboard() {
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
     .reduce((s, r) => s + _rowValue(r), 0);
   const cmdCoveragePct  = cmdCoverageBase > 0 ? Math.min(cmdShownBack / cmdCoverageBase * 100, 100) : 0;
+  // Showback breakdown by method (for Total Showback tile)
+  const _sbAmt = (pred) => filtered
+    .filter(r => _isShowbackRow(r) && pred(r) && _coverageDepts.some(d => (r[d.key]||0) !== 0))
+    .reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key]||0), 0), 0);
+  const cmdShowbackHC    = _sbAmt(r => (r.showbackType||'').toLowerCase().includes('headcount'));
+  const cmdShowbackCon   = _sbAmt(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback'); });
+  const cmdShowbackConCB = _sbAmt(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback'); });
   const cmdVariance            = totalBudget - totalPeriod;
   const showNotShownBackPanel  = !(user?.allowed_departments?.length) || user.allowed_departments.includes('Technology');
   const cmdTotalFlags     = rows.filter(r => r.comments).length;
@@ -859,62 +866,58 @@ export default function TechnologyShowbackDashboard() {
       )}
 
       {/* ── Command strip (Overview only) ────────────────────────────────────── */}
-      {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && (
-        <div style={{
-          background: '#003460',
-          display: 'grid',
-          gridTemplateColumns: showNotShownBackPanel ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
-          borderBottom: '1px solid rgba(255,255,255,.08)',
-        }}>
-          {[
-            {
-              label:  'Total Spend · ' + periodLabel,
-              value:  cadShort(totalPeriod),
-              valueColor: 'white',
-              pill:   period === 'actuals' ? `▼ ${cadShort(cmdVariance)} under budget` : null,
-              pillColor: cmdVariance >= 0 ? '#69F0AE' : '#EF9A9A',
-              pillBg:    cmdVariance >= 0 ? 'rgba(105,240,174,.15)' : 'rgba(239,154,154,.15)',
-              sub:    period === 'actuals' ? `vs ${cadShort(totalBudget)} budget` : null,
-            },
-            {
-              label:  'Showback Coverage',
-              value:  cmdCoveragePct.toFixed(1) + '%',
-              valueColor: '#69F0AE',
-              pill:   `${cadShort(cmdShownBack)} of ${cadShort(cmdCoverageBase)} shown back`,
-              pillColor: 'rgba(255,255,255,.85)',
-              pillBg:    'rgba(255,255,255,.1)',
-              sub:    `${filtered.filter(r => (r.showbackType||'').toLowerCase().startsWith('showback') && _coverageDepts.some(d=>(r[d.key]||0)!==0)).length} of ${filtered.length} items`,
-              pendingAmt:  cmdPendingUserList,
-              pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
-            },
-            ...(showNotShownBackPanel ? [{
-              label:     `Technology ${cadShort(totalPeriod)} · Breakdown`,
-              breakdown: [
-                { label: 'Total Showback', amount: cmdShownBack,      color: '#69F0AE',               pct: cmdCoveragePct,                                              separator: true,  section: 'Shown Back',     rows: filtered.filter(r => _isShowbackRow(r) && _coverageDepts.some(d => (r[d.key]||0) !== 0)) },
-                { label: 'Tech Absorbed',  amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech / totalPeriod * 100 : 0, separator: false, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
-                { label: 'Tech Owned',     amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback    / totalPeriod * 100 : 0, separator: false, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                { label: 'Not Configured', amount: cmdNotConfigured,  color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured  / totalPeriod * 100 : 0, separator: false, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
-              ],
-            }] : []),
-          ].map((c, i) => (
-            <div key={i} style={{
-              padding: '14px 28px',
-              borderRight: i < 2 ? '1px solid rgba(255,255,255,.08)' : 'none',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>
-                {c.label}
-              </div>
-              {c.breakdown ? (
-                <div>
-                  <div style={{ display: 'flex', gap: 0, marginBottom: 6 }}>
+      {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && (() => {
+        const cmdTechNotShownBack = cmdNoShowbackTech + cmdNoShowback + cmdNotConfigured;
+        const tiles = [
+          {
+            label:     'Total Spend · ' + periodLabel,
+            value:     cadShort(totalPeriod),
+            valueColor: 'white',
+            pill:      period === 'actuals' ? `▼ ${cadShort(cmdVariance)} under budget` : null,
+            pillColor: cmdVariance >= 0 ? '#69F0AE' : '#EF9A9A',
+            pillBg:    cmdVariance >= 0 ? 'rgba(105,240,174,.15)' : 'rgba(239,154,154,.15)',
+            sub:       period === 'actuals' ? `vs ${cadShort(totalBudget)} budget` : null,
+          },
+          {
+            label:      `Total Showback ${cadShort(cmdShownBack)} · Breakdown`,
+            pendingAmt: cmdPendingUserList,
+            pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
+            breakdown: [
+              { label: 'Headcount',   amount: cmdShowbackHC,    color: '#69F0AE',               pct: cmdShownBack > 0 ? cmdShowbackHC    / cmdShownBack * 100 : 0, section: 'Shown Back', rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _coverageDepts.some(d=>(r[d.key]||0)!==0)) },
+              { label: 'Consumption', amount: cmdShowbackCon,   color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackCon   / cmdShownBack * 100 : 0, section: 'Shown Back', rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
+              { label: 'Con → CB',    amount: cmdShowbackConCB, color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackConCB / cmdShownBack * 100 : 0, section: 'Shown Back', rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
+            ],
+          },
+          {
+            label:    `Technology ${cadShort(cmdTechNotShownBack)} · Breakdown`,
+            breakdown: [
+              { label: 'Tech Absorbed',  amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
+              { label: 'Tech Owned',     amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback     / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+              { label: 'Not Configured', amount: cmdNotConfigured,  color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured  / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+            ],
+          },
+        ];
+        return (
+          <div style={{ background: '#003460', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+            {tiles.map((c, i) => (
+              <div key={i} style={{ padding: '14px 28px', borderRight: i < tiles.length - 1 ? '1px solid rgba(255,255,255,.25)' : 'none' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {c.label}
+                  {c.pendingAmt > 0 && (
+                    <span
+                      onClick={() => setHeroModal({ section: 'Showback Coverage', title: 'Pending User Listing', note: 'Pending data', rows: c.pendingRows, total: c.pendingAmt })}
+                      style={{ fontSize: 10, fontWeight: 600, color: '#FFD54F', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2, textTransform: 'none', letterSpacing: 0 }}
+                    >· {cadShort(c.pendingAmt)} pending</span>
+                  )}
+                </div>
+                {c.breakdown ? (
+                  <div style={{ display: 'flex', gap: 0 }}>
                     {c.breakdown.map((row, j) => (
                       <div key={j} style={{
                         flex: 1,
                         paddingRight: j < c.breakdown.length - 1 ? 12 : 0,
-                        paddingLeft: j > 0 ? 12 : 0,
-                        borderRight: j < c.breakdown.length - 1
-                          ? (row.separator ? '2px solid rgba(255,255,255,.25)' : '1px solid rgba(255,255,255,.07)')
-                          : 'none',
+                        paddingLeft:  j > 0 ? 12 : 0,
+                        borderRight:  j < c.breakdown.length - 1 ? '1px solid rgba(255,255,255,.07)' : 'none',
                       }}>
                         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.6)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
                         <div
@@ -927,32 +930,20 @@ export default function TechnologyShowbackDashboard() {
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: c.valueColor, letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>
-                    {c.value}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {c.pill != null && (
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>
-                        {c.pill}
-                      </span>
-                    )}
-                    {c.sub != null && <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>{c.sub}</span>}
-                    {c.pendingAmt > 0 && (
-                      <span
-                        onClick={() => setHeroModal({ section: 'Showback Coverage', title: 'Pending User Listing', note: 'Pending data', rows: c.pendingRows, total: c.pendingAmt })}
-                        style={{ fontSize: 11, color: '#FFD54F', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2 }}
-                      >· ({cadShort(c.pendingAmt)} pending User Listing)</span>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+                ) : (
+                  <>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: c.valueColor, letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{c.value}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {c.pill != null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: c.pillBg, color: c.pillColor }}>{c.pill}</span>}
+                      {c.sub  != null && <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>{c.sub}</span>}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Global Filters ─────────────────────────────────────────────────────── */}
       {!['upload', 'quality', 'admin', 'userlisting'].includes(activeTab) && showNotShownBackPanel && (
