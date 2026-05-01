@@ -583,10 +583,9 @@ export default function TechnologyShowbackDashboard() {
     name:   d.label,
     key:    d.key,
     value:  filtered
-      .filter(r => _isApproachRow(r)
-        && (_deptRestrictedKeys ? !_isDirectCB(r) : true)
+      .filter(r => (r.showbackType || '').toLowerCase().startsWith('showback')
         && DEPTS.some(dk => (r[dk.key] || 0) !== 0))
-      .reduce((s, r) => s + Math.max(r[d.key] || 0, 0), 0),
+      .reduce((s, r) => s + (r[d.key] || 0), 0),
     color:  DEPT_COLORS[i],
     isTech: d.key === 'technology',
   })).sort((a, b) => b.value - a.value);
@@ -1672,7 +1671,7 @@ export default function TechnologyShowbackDashboard() {
                 })()}
                 {!_deptRestrictedKeys && (
                   <div style={{ marginTop: 14, fontSize: 13, color: '#BFBFBF' }}>
-                    Technology's absorbed cost ({cadShort(deptTotals.find(d => d.isTech)?.value || 0)}) is not charged to any department
+                    Technology's absorbed cost ({cadShort(cmdNoShowbackTech)}) is not charged to any department
                   </div>
                 )}
               </div>
