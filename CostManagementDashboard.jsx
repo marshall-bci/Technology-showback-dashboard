@@ -518,7 +518,19 @@ export default function TechnologyShowbackDashboard() {
       return acc;
     }, {})
   ).map(([name, { value, rows }]) => ({ name, value, rows }))
-   .sort((a, b) => b.value - a.value); // largest → smallest, clockwise from top
+   .sort((a, b) => {
+     const order = [
+       n => n.toLowerCase().includes('headcount'),
+       n => n.toLowerCase().includes('consumption') && !n.toLowerCase().includes('chargeback'),
+       n => n.toLowerCase().includes('consumption') && n.toLowerCase().includes('chargeback'),
+       n => n.toLowerCase() === 'no showback',
+       n => n.toLowerCase().includes("technology's portion"),
+       n => n === 'Direct Chargeback',
+       n => n.toLowerCase() === 'none',
+     ];
+     const ai = order.findIndex(p => p(a.name)); const bi = order.findIndex(p => p(b.name));
+     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+   });
 
   const _isApproachRow = r => {
     const st = (r.showbackType || '').toLowerCase();
@@ -1312,7 +1324,7 @@ export default function TechnologyShowbackDashboard() {
                   pctLabel: period === 'actuals' && totalBudget > 0 ? `${(_deptTotal / totalBudget * 100).toFixed(1)}%` : '—',
                 },
                 {
-                  name: 'Technology Share',
+                  name: 'Technology, No Showback',
                   badge: 'Absorbed',
                   color: NAVY,
                   amount: cadShort(techActuals),
@@ -1324,6 +1336,18 @@ export default function TechnologyShowbackDashboard() {
                   pctLabel: pct(techActuals, totalPeriod),
                 },
                 {
+                  name: 'Technology, No Showback',
+                  badge: 'Owned',
+                  color: NAVY,
+                  amount: cadShort(cmdNoShowback),
+                  rawTotal: cmdNoShowback,
+                  rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback'),
+                  subLine: `${pct(cmdNoShowback, totalPeriod)} of total · ${filteredRaw.filter(r => (r.showbackType||'').toLowerCase() === 'no showback').length} line items`,
+                  barPct: totalPeriod > 0 ? cmdNoShowback / totalPeriod * 100 : 0,
+                  meta: 'Costs intentionally not shown back',
+                  pctLabel: pct(cmdNoShowback, totalPeriod),
+                },
+                {
                   name: 'Below $25K Threshold',
                   badge: 'Materiality',
                   color: thresholdColor,
@@ -1333,12 +1357,12 @@ export default function TechnologyShowbackDashboard() {
                   rowAmt: _deptRowAmt || undefined,
                   subLine: `${_deptTotal > 0 ? (belowThresholdTotal / _deptTotal * 100).toFixed(1) : '—'}% of total · ${belowThresholdRows.length} line items`,
                   barPct: _deptTotal > 0 ? belowThresholdTotal / _deptTotal * 100 : 0,
-                  meta: 'Items shown back below threshold',
+                  meta: 'Already included in total showback — highlighted separately as these items fall below the $25K materiality threshold',
                   pctLabel: `${_deptTotal > 0 ? (belowThresholdTotal / _deptTotal * 100).toFixed(1) : '—'}%`,
                 },
               ];
               return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
                   {kpiCards.map((k, i) => (
                     <div key={i} style={card({ padding: '18px 20px' })}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
