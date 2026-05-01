@@ -579,7 +579,7 @@ export default function TechnologyShowbackDashboard() {
   const _nonTechDepts        = _coverageDepts.filter(d => d.key !== 'technology');
   const cmdTechOwnShowback   = filtered
     .filter(r => _isShowbackRow(r))
-    .reduce((s, r) => s + Math.max(r.technology || 0, 0), 0);
+    .reduce((s, r) => s + (r.technology || 0), 0);
   const cmdShownBackExclTech = cmdShownBack - cmdTechOwnShowback;
 
   const cmdNotShownBack = filtered
@@ -947,7 +947,7 @@ export default function TechnologyShowbackDashboard() {
           { label: 'Headcount',   rows: expandItem.rows.filter(r => (r.showbackType||'').toLowerCase().includes('headcount')) },
           { label: 'Consumption', rows: expandItem.rows.filter(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback'); }) },
           { label: 'Con → CB',    rows: expandItem.rows.filter(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback'); }) },
-        ].map(m => ({ ...m, amount: m.rows.reduce((s, r) => s + Math.max(r.technology || 0, 0), 0) }))
+        ].map(m => ({ ...m, amount: m.rows.reduce((s, r) => s + (r.technology || 0), 0) }))
          .filter(m => m.amount > 0)
          .sort((a, b) => b.amount - a.amount) : [];
         const expandMethodMax = expandMethods[0]?.amount || 1;
