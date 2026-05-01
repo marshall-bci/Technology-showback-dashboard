@@ -1577,7 +1577,7 @@ export default function TechnologyShowbackDashboard() {
                         <div style={{ width: `${directCBW}%`,  background: '#DC642B' }} />
                         <div style={{ width: `${notConfigW}%`, background: '#FFD54F' }} />
                       </div>
-                      <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#A0A8B0', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 12, color: '#A0A8B0', flexWrap: 'wrap' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                           <span style={{ width: 8, height: 8, background: 'rgba(0,54,91,0.38)', borderRadius: 1, display: 'inline-block' }} />
                           Absorbed {cadShort(cmdNoShowbackTech)}
