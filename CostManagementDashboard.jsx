@@ -1521,7 +1521,7 @@ export default function TechnologyShowbackDashboard() {
                   {/* BCI totals summary row */}
                   {(() => {
                     const totalOC = deptOCTotal + techOCBudget;
-                    const totalSB = fullCostRows.reduce((s, d) => s + d.showbackAlloc, 0) + cmdTechOwnShowback;
+                    const totalSB = cmdShownBackExclTech;
                     return (
                       <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 90px 90px 96px', gap: '0 10px', padding: '0 0 12px', borderBottom: '1px solid #EBEBEB', alignItems: 'center' }}>
                         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#A0A8B0' }}>BCI Total</div>
@@ -1594,11 +1594,11 @@ export default function TechnologyShowbackDashboard() {
                     </div>
                     <span style={{ textAlign: 'right', fontSize: 13, color: '#696F79' }}>{cadShort(techOCBudget)}</span>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: CYAN }}>{cadShort(cmdTechOwnShowback)}</div>
-                      <div style={{ fontSize: 10, color: '#A0A8B0' }}>own allocation</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#DC642B' }}>-{cadShort(cmdShownBackExclTech)}</div>
+                      <div style={{ fontSize: 10, color: '#A0A8B0' }}>distributed out</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(netRetained)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(techOCBudget - cmdShownBackExclTech)}</div>
                       <div style={{ fontSize: 10, color: '#A0A8B0' }}>net retained</div>
                     </div>
                   </div>
