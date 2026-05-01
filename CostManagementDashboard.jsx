@@ -1979,18 +1979,20 @@ export default function TechnologyShowbackDashboard() {
                   <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
                     <div style={{ height: '100%', borderRadius: 3, background: '#DC642B', width: `${_showbackTotal > 0 ? cmdNotShownBack / _showbackTotal * 100 : 0}%` }} />
                   </div>
-                  {/* Four-way breakdown */}
+                  {/* Five-way breakdown */}
                   <div style={{ display: 'flex', gap: 0, paddingTop: 10, borderTop: '1px solid #F2F2F2' }}>
                     {[
-                      { label: 'No Showback',          amount: cmdNoShowback,        note: 'Intentional',    rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-                      { label: "Technology's Portion", amount: cmdNoShowbackTech,    note: 'Tech-specific',  rows: filtered.filter(r => (r.showbackType||'').toLowerCase().includes("technology's portion")) },
-                      { label: 'Not Configured',       amount: cmdNotConfigured,     note: 'Needs decision', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
-                    ].map((row, j) => (
-                      <div key={j} style={{ flex: 1, borderRight: j < 3 ? '1px solid #F2F2F2' : 'none', paddingRight: j < 3 ? 10 : 0, paddingLeft: j > 0 ? 10 : 0 }}>
-                        <div style={{ fontSize: 11, color: '#A0A8B4', marginBottom: 3, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' }}>{row.label}</div>
-                        <div onClick={() => setHeroModal({ section: 'Not Shown Back', title: row.label, note: row.note, rows: row.rows, total: row.amount })}
+                      { label: 'Tech Absorbed',     amount: cmdNoShowbackTech,  rows: filtered.filter(r => _isTechPortion(r) && !_isDCB(r)) },
+                      { label: 'Tech Owned',        amount: cmdNoShowback,       rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+                      { label: 'Own Alloc',         amount: cmdTechOwnShowback,  rows: filtered.filter(r => _isShowbackRow(r) && (r.technology||0) !== 0) },
+                      { label: 'Direct CB',         amount: cmdDirectCB,         rows: filtered.filter(r => _isDCB(r)) },
+                      { label: 'Not Configured',    amount: cmdNotConfigured,    rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+                    ].map((row, j, arr) => (
+                      <div key={j} style={{ flex: 1, borderRight: j < arr.length - 1 ? '1px solid #F2F2F2' : 'none', paddingRight: j < arr.length - 1 ? 10 : 0, paddingLeft: j > 0 ? 10 : 0 }}>
+                        <div style={{ fontSize: 10, color: '#A0A8B4', marginBottom: 3, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '.5px' }}>{row.label}</div>
+                        <div onClick={() => setHeroModal({ section: 'Not Shown Back', title: row.label, note: `${totalPeriod > 0 ? (row.amount / totalPeriod * 100).toFixed(1) : 0}%`, rows: row.rows, total: row.amount })}
                              style={{ fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 4, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 2 }}>{cadShort(row.amount)}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 5, display: 'inline-block', background: '#F2F2F2', color: '#696F79' }}>{row.note}</div>
+                        <div style={{ fontSize: 11, color: '#A0A8B0' }}>{totalPeriod > 0 ? (row.amount / totalPeriod * 100).toFixed(1) : 0}%</div>
                       </div>
                     ))}
                   </div>
