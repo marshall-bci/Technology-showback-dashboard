@@ -1640,7 +1640,7 @@ export default function TechnologyShowbackDashboard() {
                 {(() => {
                   const visibleDepts = _deptRestrictedKeys
                     ? deptTotals.filter(d => _deptRestrictedKeys.some(dk => dk.key === d.key))
-                    : deptTotals;
+                    : deptTotals.filter(d => !d.isTech);
                   const maxVal = visibleDepts[0]?.value || 1;
                   let rankIdx = 0;
                   return visibleDepts.map((d) => {
