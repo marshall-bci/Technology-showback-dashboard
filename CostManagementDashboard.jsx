@@ -1496,7 +1496,8 @@ export default function TechnologyShowbackDashboard() {
               const absorbedW      = cmdNoShowbackTech  / maxTotal * 100;
               const ownedW         = cmdNoShowback      / maxTotal * 100;
               const ownAllocW      = cmdTechOwnShowback / maxTotal * 100;
-              const netRetained    = cmdNoShowback + cmdNoShowbackTech;
+              const directCBW      = cmdDirectCB        / maxTotal * 100;
+              const notConfigW     = cmdNotConfigured   / maxTotal * 100;
               return (
                 <div style={{ ...card({ padding: '22px 24px' }), marginBottom: 20 }}>
                   {/* Header */}
@@ -1572,11 +1573,13 @@ export default function TechnologyShowbackDashboard() {
                     </div>
                     <div>
                       <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#F0F0F0' }}>
-                        <div style={{ width: `${absorbedW}%`, background: 'rgba(0,54,91,0.38)' }} />
-                        <div style={{ width: `${ownedW}%`,    background: NAVY }} />
-                        <div style={{ width: `${ownAllocW}%`, background: CYAN }} />
+                        <div style={{ width: `${absorbedW}%`,  background: 'rgba(0,54,91,0.38)' }} />
+                        <div style={{ width: `${ownedW}%`,     background: NAVY }} />
+                        <div style={{ width: `${ownAllocW}%`,  background: CYAN }} />
+                        <div style={{ width: `${directCBW}%`,  background: '#DC642B' }} />
+                        <div style={{ width: `${notConfigW}%`, background: '#FFD54F' }} />
                       </div>
-                      <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#A0A8B0' }}>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#A0A8B0', flexWrap: 'wrap' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                           <span style={{ width: 8, height: 8, background: 'rgba(0,54,91,0.38)', borderRadius: 1, display: 'inline-block' }} />
                           Absorbed {cadShort(cmdNoShowbackTech)}
@@ -1588,7 +1591,14 @@ export default function TechnologyShowbackDashboard() {
                         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                           <span style={{ width: 8, height: 8, background: CYAN, borderRadius: 1, display: 'inline-block' }} />
                           Own allocation {cadShort(cmdTechOwnShowback)}
-                          <span style={{ color: '#C8CDD2', marginLeft: 3 }}>— internal transfer</span>
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ width: 8, height: 8, background: '#DC642B', borderRadius: 1, display: 'inline-block' }} />
+                          Direct CB {cadShort(cmdDirectCB)}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ width: 8, height: 8, background: '#FFD54F', borderRadius: 1, display: 'inline-block' }} />
+                          Not configured {cadShort(cmdNotConfigured)}
                         </span>
                       </div>
                     </div>
