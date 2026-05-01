@@ -1603,11 +1603,11 @@ export default function TechnologyShowbackDashboard() {
                     <span style={{ textAlign: 'right', fontSize: 13, color: '#696F79' }}>{cadShort(techOCBudget)}</span>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#DC642B' }}>-{cadShort(cmdShownBackExclTech)}</div>
-                      <div style={{ fontSize: 10, color: '#A0A8B0' }}>distributed out</div>
+                      <div style={{ fontSize: 12, color: '#A0A8B0' }}>distributed out</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(techOCBudget - cmdShownBackExclTech)}</div>
-                      <div style={{ fontSize: 10, color: '#A0A8B0' }}>net retained</div>
+                      <div style={{ fontSize: 12, color: '#A0A8B0' }}>net retained</div>
                     </div>
                   </div>
                 </div>
