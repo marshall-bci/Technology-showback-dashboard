@@ -635,7 +635,7 @@ export default function TechnologyShowbackDashboard() {
   // Technology's own allocation from the showback programme — excluded from Total Showback
   // and moved into the Technology tile (it's already in Technology's budget, not a real transfer out)
   const _nonTechDepts        = _coverageDepts.filter(d => d.key !== 'technology');
-  const cmdTechOwnShowback   = filtered
+  const cmdTechOwnShowback   = _deptRestrictedKeys ? 0 : filtered
     .filter(r => _isShowbackRow(r))
     .reduce((s, r) => s + (r.technology || 0), 0);
   const cmdShownBackExclTech = cmdShownBack - cmdTechOwnShowback;
@@ -1486,8 +1486,8 @@ export default function TechnologyShowbackDashboard() {
               );
             })()}
 
-            {/* Full Technology Cost by Department */}
-            {deptTechCost?.loaded && (() => {
+            {/* Full Technology Cost by Department — Technology/admin view only */}
+            {showNotShownBackPanel && deptTechCost?.loaded && (() => {
               const maxTotal        = fullCostRows[0]?.total || 1;
               const techOCBudget   = deptTechCost?.technology?.[_ocField] || totalPeriod;
               const deptOCTotal    = fullCostRows.reduce((s, d) => s + d.ocBudget, 0);
