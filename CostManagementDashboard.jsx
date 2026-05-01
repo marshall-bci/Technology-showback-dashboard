@@ -574,6 +574,13 @@ export default function TechnologyShowbackDashboard() {
   const cmdPendingUserList = filteredRaw
     .filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key] || 0) === 0))
     .reduce((s, r) => s + (r[period] || 0), 0);
+  // Technology's own allocation from the showback programme — excluded from Total Showback
+  // and moved into the Technology tile (it's already in Technology's budget, not a real transfer out)
+  const _nonTechDepts        = _coverageDepts.filter(d => d.key !== 'technology');
+  const cmdTechOwnShowback   = filtered
+    .filter(r => _isShowbackRow(r))
+    .reduce((s, r) => s + Math.max(r.technology || 0, 0), 0);
+  const cmdShownBackExclTech = cmdShownBack - cmdTechOwnShowback;
 
   const cmdNotShownBack = filtered
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
@@ -586,6 +593,13 @@ export default function TechnologyShowbackDashboard() {
   const cmdShowbackHC    = _sbAmt(r => (r.showbackType||'').toLowerCase().includes('headcount'));
   const cmdShowbackCon   = _sbAmt(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback'); });
   const cmdShowbackConCB = _sbAmt(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback'); });
+  // Exclude-Technology variants: denominate by cmdShownBackExclTech so pcts add to 100%
+  const _sbAmtExclTech    = (pred) => filtered
+    .filter(r => _isShowbackRow(r) && pred(r) && _nonTechDepts.some(d => (r[d.key]||0) !== 0))
+    .reduce((s, r) => s + _nonTechDepts.reduce((ds, d) => ds + (r[d.key]||0), 0), 0);
+  const cmdShowbackHCxt    = _sbAmtExclTech(r => (r.showbackType||'').toLowerCase().includes('headcount'));
+  const cmdShowbackConxt   = _sbAmtExclTech(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback'); });
+  const cmdShowbackConCBxt = _sbAmtExclTech(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback'); });
   const cmdVariance            = totalBudget - totalPeriod;
   const showNotShownBackPanel  = !(user?.allowed_departments?.length) || user.allowed_departments.includes('Technology');
   const cmdTotalFlags     = rows.filter(r => r.comments).length;
@@ -888,7 +902,7 @@ export default function TechnologyShowbackDashboard() {
 
       {/* ── Command strip (Overview only) ────────────────────────────────────── */}
       {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && (() => {
-        const cmdTechNotShownBack = cmdNoShowbackTech + cmdNoShowback + cmdNotConfigured + cmdDirectCB;
+        const cmdTechNotShownBack = cmdNoShowbackTech + cmdNoShowback + cmdNotConfigured + cmdDirectCB + cmdTechOwnShowback;
         const tiles = [
           {
             label:     'Total Spend · ' + periodLabel,
@@ -900,32 +914,43 @@ export default function TechnologyShowbackDashboard() {
             sub:       period === 'actuals' ? `vs ${cadShort(totalBudget)} budget` : null,
           },
           {
-            label:      `Total Showback ${cadShort(cmdShownBack)} · Breakdown`,
+            label:      `Total Showback ${cadShort(cmdShownBackExclTech)} · Breakdown`,
             pendingAmt: cmdPendingUserList,
             pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
             breakdown: [
-              { label: 'Headcount',   amount: cmdShowbackHC,    color: '#69F0AE',               pct: cmdShownBack > 0 ? cmdShowbackHC    / cmdShownBack * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _coverageDepts.some(d=>(r[d.key]||0)!==0)) },
-              { label: 'Consumption', amount: cmdShowbackCon,   color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackCon   / cmdShownBack * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
-              { label: 'Con → CB',    amount: cmdShowbackConCB, color: 'rgba(255,255,255,.85)', pct: cmdShownBack > 0 ? cmdShowbackConCB / cmdShownBack * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _coverageDepts.some(d=>(r[d.key]||0)!==0); }) },
+              { label: 'Headcount',   amount: cmdShowbackHCxt,    color: '#69F0AE',               pct: cmdShownBackExclTech > 0 ? cmdShowbackHCxt    / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _nonTechDepts.some(d=>(r[d.key]||0)!==0)) },
+              { label: 'Consumption', amount: cmdShowbackConxt,   color: 'rgba(255,255,255,.85)', pct: cmdShownBackExclTech > 0 ? cmdShowbackConxt   / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _nonTechDepts.some(d=>(r[d.key]||0)!==0); }) },
+              { label: 'Con → CB',    amount: cmdShowbackConCBxt, color: 'rgba(255,255,255,.85)', pct: cmdShownBackExclTech > 0 ? cmdShowbackConCBxt / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _nonTechDepts.some(d=>(r[d.key]||0)!==0); }) },
             ],
           },
           {
             label:    `Technology ${cadShort(cmdTechNotShownBack)} · Breakdown · No Showback`,
             breakdown: [
-              { label: 'Tech Absorbed',     amount: cmdNoShowbackTech, color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isTechPortion(r) && !_isDCB(r)) },
-              { label: 'Tech Owned',        amount: cmdNoShowback,     color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback     / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
-              { label: 'Direct Chargeback', amount: cmdDirectCB,       color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdDirectCB       / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isDCB(r)) },
-              { label: 'Not Configured',    amount: cmdNotConfigured,  color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured  / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+              { label: 'Tech Absorbed',     amount: cmdNoShowbackTech,   color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech   / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isTechPortion(r) && !_isDCB(r)) },
+              { label: 'Tech Owned',        amount: cmdNoShowback,       color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowback       / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => (r.showbackType||'').toLowerCase() === 'no showback') },
+              { label: 'Own Alloc',         amount: cmdTechOwnShowback,  color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdTechOwnShowback  / totalPeriod * 100 : 0, section: 'Not Shown Back', expandByMethod: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.technology || 0) !== 0) },
+              { label: 'Direct Chargeback', amount: cmdDirectCB,         color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdDirectCB         / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isDCB(r)) },
+              { label: 'Not Configured',    amount: cmdNotConfigured,    color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured    / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
             ],
           },
         ];
-        const expandItem = cmdExpandLabel ? tiles[1].breakdown?.find(b => b.label === cmdExpandLabel) : null;
-        const expandDepts = expandItem ? DEPTS.map(d => ({
-          ...d,
-          amount: expandItem.rows.reduce((s, r) => s + (r[d.key] || 0), 0),
-          deptRows: expandItem.rows.filter(r => (r[d.key] || 0) !== 0),
-        })).filter(d => d.amount > 0).sort((a, b) => b.amount - a.amount) : [];
+        const expandItem = cmdExpandLabel ? tiles.flatMap(t => t.breakdown || []).find(b => b.label === cmdExpandLabel) : null;
+        const expandDepts = (expandItem && !expandItem.expandByMethod) ? DEPTS
+          .filter(d => d.key !== 'technology')
+          .map(d => ({
+            ...d,
+            amount: expandItem.rows.reduce((s, r) => s + (r[d.key] || 0), 0),
+            deptRows: expandItem.rows.filter(r => (r[d.key] || 0) !== 0),
+          })).filter(d => d.amount > 0).sort((a, b) => b.amount - a.amount) : [];
         const expandMax = expandDepts[0]?.amount || 1;
+        const expandMethods = (expandItem?.expandByMethod) ? [
+          { label: 'Headcount',   rows: expandItem.rows.filter(r => (r.showbackType||'').toLowerCase().includes('headcount')) },
+          { label: 'Consumption', rows: expandItem.rows.filter(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && !st.includes('chargeback'); }) },
+          { label: 'Con → CB',    rows: expandItem.rows.filter(r => { const st=(r.showbackType||'').toLowerCase(); return st.includes('consumption') && st.includes('chargeback'); }) },
+        ].map(m => ({ ...m, amount: m.rows.reduce((s, r) => s + Math.max(r.technology || 0, 0), 0) }))
+         .filter(m => m.amount > 0)
+         .sort((a, b) => b.amount - a.amount) : [];
+        const expandMethodMax = expandMethods[0]?.amount || 1;
         return (
           <>
           <div style={{ background: '#004C8C', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: cmdExpandLabel ? 'none' : '1px solid rgba(255,255,255,.08)' }}>
@@ -951,7 +976,7 @@ export default function TechnologyShowbackDashboard() {
                       }}>
                         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.6)', marginBottom: 3, whiteSpace: 'nowrap' }}>{row.label}</div>
                         <div
-                          onClick={() => row.expandByDept
+                          onClick={() => (row.expandByDept || row.expandByMethod)
                             ? setCmdExpandLabel(cmdExpandLabel === row.label ? null : row.label)
                             : setHeroModal({ section: row.section, title: row.label, note: `${row.pct.toFixed(1)}%`, rows: row.rows, total: row.amount })
                           }
@@ -978,22 +1003,37 @@ export default function TechnologyShowbackDashboard() {
           {expandItem && (
             <div style={{ background: '#004C8C', borderTop: '1px solid rgba(255,255,255,.2)', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '12px 28px' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 10 }}>
-                {cmdExpandLabel} — By Department
+                {cmdExpandLabel} — {expandItem.expandByMethod ? 'By Method' : 'By Department'}
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {expandDepts.map(d => (
-                  <div key={d.key} style={{ background: 'rgba(255,255,255,.08)', borderRadius: 6, padding: '10px 14px', minWidth: 110, flex: '0 0 auto' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.55)', marginBottom: 4, whiteSpace: 'nowrap' }}>{d.label}</div>
-                    <div
-                      onClick={() => setHeroModal({ section: cmdExpandLabel, title: d.label, note: `${pct(d.amount, expandItem.amount)}`, rows: d.deptRows, total: d.amount, rowAmt: r => r[d.key] || 0 })}
-                      style={{ fontSize: 16, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3, marginBottom: 6 }}
-                    >{cadShort(d.amount)}</div>
-                    <div style={{ height: 4, background: 'rgba(255,255,255,.15)', borderRadius: 2, marginBottom: 4 }}>
-                      <div style={{ height: '100%', borderRadius: 2, background: '#00ABBD', width: `${d.amount / expandMax * 100}%` }} />
-                    </div>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,.55)' }}>{pct(d.amount, expandItem.amount)}</div>
-                  </div>
-                ))}
+                {expandItem.expandByMethod
+                  ? expandMethods.map(m => (
+                      <div key={m.label} style={{ background: 'rgba(255,255,255,.08)', borderRadius: 6, padding: '10px 14px', minWidth: 110, flex: '0 0 auto' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.55)', marginBottom: 4, whiteSpace: 'nowrap' }}>{m.label}</div>
+                        <div
+                          onClick={() => setHeroModal({ section: 'Own Alloc', title: m.label, note: `${pct(m.amount, expandItem.amount)}`, rows: m.rows, total: m.amount, rowAmt: r => r.technology || 0 })}
+                          style={{ fontSize: 16, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3, marginBottom: 6 }}
+                        >{cadShort(m.amount)}</div>
+                        <div style={{ height: 4, background: 'rgba(255,255,255,.15)', borderRadius: 2, marginBottom: 4 }}>
+                          <div style={{ height: '100%', borderRadius: 2, background: '#00ABBD', width: `${m.amount / expandMethodMax * 100}%` }} />
+                        </div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.55)' }}>{pct(m.amount, expandItem.amount)}</div>
+                      </div>
+                    ))
+                  : expandDepts.map(d => (
+                      <div key={d.key} style={{ background: 'rgba(255,255,255,.08)', borderRadius: 6, padding: '10px 14px', minWidth: 110, flex: '0 0 auto' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,.55)', marginBottom: 4, whiteSpace: 'nowrap' }}>{d.label}</div>
+                        <div
+                          onClick={() => setHeroModal({ section: cmdExpandLabel, title: d.label, note: `${pct(d.amount, expandItem.amount)}`, rows: d.deptRows, total: d.amount, rowAmt: r => r[d.key] || 0 })}
+                          style={{ fontSize: 16, fontWeight: 700, color: 'white', letterSpacing: '-0.5px', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3, marginBottom: 6 }}
+                        >{cadShort(d.amount)}</div>
+                        <div style={{ height: 4, background: 'rgba(255,255,255,.15)', borderRadius: 2, marginBottom: 4 }}>
+                          <div style={{ height: '100%', borderRadius: 2, background: '#00ABBD', width: `${d.amount / expandMax * 100}%` }} />
+                        </div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.55)' }}>{pct(d.amount, expandItem.amount)}</div>
+                      </div>
+                    ))
+                }
               </div>
             </div>
           )}
