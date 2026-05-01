@@ -1611,18 +1611,6 @@ export default function TechnologyShowbackDashboard() {
                       <div style={{ fontSize: 10, color: '#A0A8B0' }}>net retained</div>
                     </div>
                   </div>
-                  {/* Footer summary */}
-                  <div style={{ marginTop: 14, padding: '10px 14px', background: '#F8F9FB', borderRadius: 6, display: 'flex', gap: '6px 16px', flexWrap: 'wrap', alignItems: 'center', fontSize: 11, color: '#696F79' }}>
-                    <span><span style={{ color: NAVY, fontWeight: 700 }}>{cadShort(deptOCTotal)}</span>&nbsp;in dept OC budgets (excl. Technology)</span>
-                    <span style={{ color: '#C8CDD2' }}>+</span>
-                    <span><span style={{ color: NAVY, fontWeight: 700 }}>{cadShort(techOCBudget)}</span>&nbsp;Technology central budget</span>
-                    <span style={{ color: '#C8CDD2' }}>=</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{cadShort(fullCostOCTotal)} total BCI technology cost</span>
-                    <span style={{ marginLeft: 4, color: '#C8CDD2' }}>·</span>
-                    <span style={{ fontSize: 10, color: '#A0A8B0' }}>
-                      Showback: {cadShort(cmdShownBackExclTech)} to other depts · {cadShort(cmdTechOwnShowback)} Technology's own allocation = {cadShort(cmdShownBack)} total — internal transfer, not additional spend
-                    </span>
-                  </div>
                 </div>
               );
             })()}
