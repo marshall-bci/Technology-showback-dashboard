@@ -42,6 +42,22 @@ const DEPTS = [
   { key: 'pe',         label: 'PE' },
 ];
 
+const DEPT_LABEL_TO_KEY = {
+  'ceo': 'ceo',
+  'legal': 'legal',
+  'hr': 'hr',
+  'corporate risk and audit': 'audit', 'audit': 'audit',
+  'corporate data & operations': 'cdo', "cd&o": 'cdo', 'cdo': 'cdo',
+  'coo': 'corpOps', 'corp ops': 'corpOps', 'corporate operations': 'corpOps',
+  'finance': 'finance',
+  'technology': 'technology',
+  'investment operations': 'io', 'io': 'io',
+  'infrastructure & renewable resources': 'irr', 'irr': 'irr',
+  'isr': 'isr',
+  'capital markets & credit investments': 'cmci', 'cm&ci': 'cmci', 'cmci': 'cmci',
+  'private equity': 'pe', 'pe': 'pe',
+};
+
 // BCI data-series palette — ordered sequence from the style guide
 const DEPT_COLORS = [
   '#00365B', // 1  Midnight
@@ -574,6 +590,26 @@ export default function TechnologyShowbackDashboard() {
     color:  DEPT_COLORS[i],
     isTech: d.key === 'technology',
   })).sort((a, b) => b.value - a.value);
+
+  const _ocField = { actuals: 'actuals', budget: 'budget', forecast1: 'forecast1', forecast2: 'forecast2' }[period] || 'actuals';
+  const deptOcBudgetMap = (() => {
+    if (!deptTechCost?.loaded) return {};
+    const m = {};
+    (deptTechCost.departments || []).forEach(row => {
+      const key = DEPT_LABEL_TO_KEY[(row.dept_label || '').toLowerCase()];
+      if (key) m[key] = row[_ocField] || 0;
+    });
+    return m;
+  })();
+  const fullCostRows = (() => {
+    if (!deptTechCost?.loaded) return [];
+    return DEPTS
+      .filter(d => d.key !== 'technology')
+      .map(d => ({ ...d, ocBudget: deptOcBudgetMap[d.key] || 0, showbackAlloc: deptTotals.find(t => t.key === d.key)?.value || 0 }))
+      .map(d => ({ ...d, total: d.ocBudget + d.showbackAlloc }))
+      .filter(d => d.ocBudget > 0 || d.showbackAlloc > 0)
+      .sort((a, b) => b.total - a.total);
+  })();
 
   const showbackTypes   = [...new Set(rows.map(r => r.showbackType || 'None'))];
   const uniqueShowbacks = [...new Set(rows.map(r => r.showbackType || 'None'))];
@@ -1443,6 +1479,112 @@ export default function TechnologyShowbackDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              );
+            })()}
+
+            {/* Full Technology Cost by Department */}
+            {deptTechCost?.loaded && (() => {
+              const maxTotal       = fullCostRows[0]?.total || 1;
+              const techOCBudget   = deptTechCost?.technology?.[_ocField] || totalPeriod;
+              const fullCostOCTotal = fullCostRows.reduce((s, d) => s + d.ocBudget, 0);
+              const grandTotal     = fullCostOCTotal + techOCBudget;
+              const absorbedW      = cmdNoShowbackTech  / maxTotal * 100;
+              const ownedW         = cmdNoShowback      / maxTotal * 100;
+              const ownAllocW      = cmdTechOwnShowback / maxTotal * 100;
+              const netRetained    = cmdNoShowback + cmdNoShowbackTech;
+              return (
+                <div style={{ ...card({ padding: '22px 24px' }), marginBottom: 20 }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 3 }}>Full Technology Cost by Department</div>
+                      <div style={{ fontSize: 12, color: '#696F79', maxWidth: 580, lineHeight: 1.5 }}>
+                        Each department already carries technology costs in their own OC budget. Add the showback programme and you see the <em>true</em> cost of technology for each part of BCI — and why Technology isn't the inflated cost centre it appears to be.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#696F79', flexShrink: 0, alignItems: 'center' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 10, height: 10, background: NAVY, borderRadius: 2, display: 'inline-block', flexShrink: 0 }} />
+                        In OC Budget
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 10, height: 10, background: CYAN, borderRadius: 2, display: 'inline-block', flexShrink: 0 }} />
+                        Showback Allocated
+                      </span>
+                    </div>
+                  </div>
+                  {/* Column headers */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 90px 90px 96px', gap: '0 10px', padding: '0 0 7px', borderBottom: '1px solid #EBEBEB', fontSize: 10, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#A0A8B0' }}>
+                    <span>Department</span>
+                    <span />
+                    <span style={{ textAlign: 'right' }}>In OC Budget</span>
+                    <span style={{ textAlign: 'right' }}>Showback</span>
+                    <span style={{ textAlign: 'right' }}>Total Cost</span>
+                  </div>
+                  {/* Data rows */}
+                  {fullCostRows.map(d => (
+                    <div key={d.key} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 90px 90px 96px', gap: '0 10px', padding: '9px 0', borderBottom: '1px solid #F5F5F5', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, color: NAVY, fontWeight: 500 }}>{d.label}</span>
+                      <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#F0F0F0' }}>
+                        <div style={{ width: `${d.ocBudget / maxTotal * 100}%`, background: NAVY }} />
+                        <div style={{ width: `${d.showbackAlloc / maxTotal * 100}%`, background: CYAN }} />
+                      </div>
+                      <span style={{ textAlign: 'right', fontSize: 13, color: '#696F79' }}>{cadShort(d.ocBudget)}</span>
+                      <span style={{ textAlign: 'right', fontSize: 13, color: CYAN }}>{cadShort(d.showbackAlloc)}</span>
+                      <span style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(d.total)}</span>
+                    </div>
+                  ))}
+                  {/* Technology footer row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 90px 90px 96px', gap: '0 10px', padding: '10px 8px', borderTop: '2px solid #E8E8E8', background: 'rgba(0,54,91,.04)', borderRadius: '0 0 6px 6px', alignItems: 'center', marginTop: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, fontStyle: 'italic' }}>Technology</span>
+                      <span style={{ fontSize: 9, background: NAVY, color: 'white', borderRadius: 3, padding: '1px 6px', fontWeight: 700, letterSpacing: '.5px' }}>Central</span>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#F0F0F0' }}>
+                        <div style={{ width: `${absorbedW}%`, background: 'rgba(0,54,91,0.38)' }} />
+                        <div style={{ width: `${ownedW}%`,    background: NAVY }} />
+                        <div style={{ width: `${ownAllocW}%`, background: CYAN }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#A0A8B0' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ width: 8, height: 8, background: 'rgba(0,54,91,0.38)', borderRadius: 1, display: 'inline-block' }} />
+                          Absorbed {cadShort(cmdNoShowbackTech)}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ width: 8, height: 8, background: NAVY, borderRadius: 1, display: 'inline-block' }} />
+                          Owned {cadShort(cmdNoShowback)}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ width: 8, height: 8, background: CYAN, borderRadius: 1, display: 'inline-block' }} />
+                          Own allocation {cadShort(cmdTechOwnShowback)}
+                          <span style={{ color: '#C8CDD2', marginLeft: 3 }}>— internal transfer</span>
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ textAlign: 'right', fontSize: 13, color: '#696F79' }}>{cadShort(techOCBudget)}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: CYAN }}>{cadShort(cmdTechOwnShowback)}</div>
+                      <div style={{ fontSize: 10, color: '#A0A8B0' }}>own allocation</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{cadShort(netRetained)}</div>
+                      <div style={{ fontSize: 10, color: '#A0A8B0' }}>net retained</div>
+                    </div>
+                  </div>
+                  {/* Footer summary */}
+                  <div style={{ marginTop: 14, padding: '10px 14px', background: '#F8F9FB', borderRadius: 6, display: 'flex', gap: '6px 16px', flexWrap: 'wrap', alignItems: 'center', fontSize: 11, color: '#696F79' }}>
+                    <span><span style={{ color: NAVY, fontWeight: 700 }}>{cadShort(fullCostOCTotal)}</span>&nbsp;in dept OC budgets (excl. Technology)</span>
+                    <span style={{ color: '#C8CDD2' }}>+</span>
+                    <span><span style={{ color: NAVY, fontWeight: 700 }}>{cadShort(techOCBudget)}</span>&nbsp;Technology central budget</span>
+                    <span style={{ color: '#C8CDD2' }}>=</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{cadShort(grandTotal)} total BCI technology cost</span>
+                    <span style={{ marginLeft: 4, color: '#C8CDD2' }}>·</span>
+                    <span style={{ fontSize: 10, color: '#A0A8B0' }}>
+                      Showback: {cadShort(cmdShownBackExclTech)} to other depts · {cadShort(cmdTechOwnShowback)} Technology's own allocation = {cadShort(cmdShownBack)} total — internal transfer, not additional spend
+                    </span>
+                  </div>
                 </div>
               );
             })()}
