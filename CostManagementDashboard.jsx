@@ -1179,7 +1179,7 @@ export default function TechnologyShowbackDashboard() {
           });
           const belowThresholdTotal = belowThresholdRows.reduce((s, r) => s + (_deptRowAmt ? _deptRowAmt(r) : DEPTS.reduce((ds, d) => ds + (r[d.key] || 0), 0)), 0);
           const selDeptInfo  = selectedDept ? DEPTS.find(d => d.key === selectedDept) : null;
-          const selDeptRows  = selectedDept ? filtered.filter(r => _isApproachRow(r) && (r[selectedDept] || 0) > 0 && (_deptRestrictedKeys ? !_isDirectCB(r) : true)) : [];
+          const selDeptRows  = selectedDept ? filtered.filter(r => (r.showbackType || '').toLowerCase().startsWith('showback') && (r[selectedDept] || 0) !== 0) : [];
           const selMethodAmt = (test) => selDeptRows.filter(r => test(r)).reduce((s, r) => s + (r[selectedDept] || 0), 0);
           const _isCbCm = r => (r.currentCostModel || '').toLowerCase().includes('chargeback') && !((r.showbackType||'').toLowerCase().startsWith('no showback'));
           const selHcTotal    = selMethodAmt(r => (r.showbackType || '').toLowerCase().includes('headcount') && (_deptRestrictedKeys ? !_isCbCm(r) : true));
