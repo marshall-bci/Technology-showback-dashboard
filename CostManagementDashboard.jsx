@@ -1568,7 +1568,6 @@ export default function TechnologyShowbackDashboard() {
                   <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 90px 90px 96px', gap: '0 10px', padding: '10px 8px', borderTop: '2px solid #E8E8E8', background: 'rgba(0,54,91,.04)', borderRadius: '0 0 6px 6px', alignItems: 'center', marginTop: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, fontStyle: 'italic' }}>Technology</span>
-                      <span style={{ fontSize: 9, background: NAVY, color: 'white', borderRadius: 3, padding: '1px 6px', fontWeight: 700, letterSpacing: '.5px' }}>Central</span>
                     </div>
                     <div>
                       <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#F0F0F0' }}>
