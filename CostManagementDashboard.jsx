@@ -1504,7 +1504,7 @@ export default function TechnologyShowbackDashboard() {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 3 }}>Full Technology Cost by Department</div>
                       <div style={{ fontSize: 12, color: '#696F79', maxWidth: 580, lineHeight: 1.5 }}>
-                        Total technology cost for each department.
+                        Total technology cost for each department after showback.
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#696F79', flexShrink: 0, alignItems: 'center' }}>
