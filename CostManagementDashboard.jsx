@@ -1925,18 +1925,42 @@ export default function TechnologyShowbackDashboard() {
             .reduce((s, r) => s + _coverageDepts.reduce((ds, d) => ds + (r[d.key] || 0), 0), 0);
 
           // ── Category breakdown ────────────────────────────────────────────
+          // Normalise a raw showbackType key to the same display name used in
+          // the Overview donut legend so both sections stay in sync.
+          const _sbDisplayName = (st) =>
+            !st ? 'None'
+            : st.toLowerCase() === 'no showback'
+              ? 'No Showback (Technology Owned)'
+              : st.toLowerCase().includes("technology's portion") || st.toLowerCase().includes('direct allocation to technology')
+                ? 'No Showback (Technology Absorbed)'
+                : st;
+
           const catMap = {};
           filtered.forEach(r => {
-            const st = r.showbackType || 'None';
-            if (_deptRestrictedKeys && st.toLowerCase().startsWith('no showback')) return;
-            // Exclude showback rows with no dept allocation (pending User Listing)
+            let st = r.showbackType || 'None';
+            const stl = st.toLowerCase();
+            const cm  = (r.currentCostModel || '').toLowerCase();
+
+            if (_deptRestrictedKeys && stl.startsWith('no showback')) return;
             if (_isShowbackRow(r) && DEPTS.every(d => (r[d.key] || 0) === 0)) return;
+            // Same recategorisations as showbackPieData
+            if (_isTechPortion(r) && _isDCB(r)) st = 'Direct Chargeback';
+            if (_deptRestrictedKeys && cm.includes('chargeback') && !stl.startsWith('no showback')) st = 'Direct Chargeback';
+
             const cat = r.costModelCategory || 'Uncategorised';
             if (!catMap[cat]) catMap[cat] = { name: cat, total: 0, rows: [], segs: {} };
-            const amt = _rowValue(r);
-            catMap[cat].total += amt;
+            catMap[cat].total += _rowValue(r);
             catMap[cat].rows.push(r);
-            catMap[cat].segs[st] = (catMap[cat].segs[st] || 0) + amt;
+
+            if (_isShowbackRow(r) && !_deptRestrictedKeys) {
+              // Split Technology's own allocation into its own segment (mirrors showbackPieData)
+              const techAmt  = r.technology || 0;
+              const otherAmt = DEPTS.filter(d => d.key !== 'technology').reduce((s, d) => s + (r[d.key] || 0), 0);
+              if (techAmt  !== 0) catMap[cat].segs['Technology Own Allocation'] = (catMap[cat].segs['Technology Own Allocation'] || 0) + techAmt;
+              if (otherAmt !== 0) catMap[cat].segs[st] = (catMap[cat].segs[st] || 0) + otherAmt;
+            } else {
+              catMap[cat].segs[st] = (catMap[cat].segs[st] || 0) + _rowValue(r);
+            }
           });
           const catData = Object.values(catMap)
             .filter(c => c.total > 0)
@@ -2064,7 +2088,7 @@ export default function TechnologyShowbackDashboard() {
                             .map(([st, val]) => (
                               <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#696F79' }}>
                                 <div style={{ width: 7, height: 7, borderRadius: 2, background: getShowbackColor(st), flexShrink: 0 }} />
-                                <span>{st || 'None'}</span>
+                                <span>{_sbDisplayName(st)}</span>
                                 <span style={{ fontWeight: 700, color: NAVY }}>{pct(val, cat.total)}</span>
                               </div>
                             ))}
@@ -2073,12 +2097,12 @@ export default function TechnologyShowbackDashboard() {
                     </div>
                   ))}
                 </div>
-                {/* Static legend */}
+                {/* Static legend — mirrors the Overview donut legend entries */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 24, paddingTop: 14, borderTop: '1px solid #F2F2F2' }}>
-                  {uniqueShowbacks.filter(st => !_deptRestrictedKeys || !st.toLowerCase().startsWith('no showback')).map(st => (
-                    <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#696F79' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: getShowbackColor(st), flexShrink: 0 }} />
-                      {st || 'None'}
+                  {showbackPieData.map(entry => (
+                    <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#696F79' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: getShowbackColor(entry.name), flexShrink: 0 }} />
+                      {_sbDisplayName(entry.name)}
                     </div>
                   ))}
                 </div>
