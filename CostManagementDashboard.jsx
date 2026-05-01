@@ -1504,7 +1504,7 @@ export default function TechnologyShowbackDashboard() {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 3 }}>Full Technology Cost by Department</div>
                       <div style={{ fontSize: 12, color: '#696F79', maxWidth: 580, lineHeight: 1.5 }}>
-                        Each department already carries technology costs in their own OC budget. Add the showback programme and you see the <em>true</em> cost of technology for each part of BCI — and why Technology isn't the inflated cost centre it appears to be.
+                        Total technology cost for each department — their own OC budget plus their allocated share from the showback programme.
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#696F79', flexShrink: 0, alignItems: 'center' }}>
