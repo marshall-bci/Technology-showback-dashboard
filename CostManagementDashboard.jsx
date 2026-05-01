@@ -68,6 +68,7 @@ const SHOWBACK_COLORS = {
 const getShowbackColor = (st) => {
   if (!st) return '#B0B8C4';
   const s = st.toLowerCase();
+  if (s === 'technology own allocation') return '#457B96';
   if (s.includes('chargeback'))  return '#DC642B';
   if (s.includes('consumption')) return '#00ABBD';
   if (s.includes('headcount'))   return '#00365B';
@@ -512,6 +513,23 @@ export default function TechnologyShowbackDashboard() {
       if (_isTechPortion(r) && _isDCB(r)) st = 'Direct Chargeback';
       // Exclude showback rows with no dept allocation yet (pending User Listing)
       if (stl.startsWith('showback') && DEPTS.every(d => (r[d.key] || 0) === 0)) return acc;
+      // For admin/Technology users split Technology's own allocation into its own slice
+      if (stl.startsWith('showback') && !_deptRestrictedKeys) {
+        const techAmt  = r.technology || 0;
+        const otherAmt = (_deptRestrictedKeys || DEPTS).filter(d => d.key !== 'technology')
+          .reduce((s, d) => s + (r[d.key] || 0), 0);
+        if (techAmt !== 0) {
+          if (!acc['Technology Own Allocation']) acc['Technology Own Allocation'] = { value: 0, rows: [] };
+          acc['Technology Own Allocation'].value += techAmt;
+          acc['Technology Own Allocation'].rows.push(r);
+        }
+        if (otherAmt !== 0) {
+          if (!acc[st]) acc[st] = { value: 0, rows: [] };
+          acc[st].value += otherAmt;
+          if (!acc[st].rows.includes(r)) acc[st].rows.push(r);
+        }
+        return acc;
+      }
       if (!acc[st]) acc[st] = { value: 0, rows: [] };
       acc[st].value += _rowValue(r);
       acc[st].rows.push(r);
@@ -523,6 +541,7 @@ export default function TechnologyShowbackDashboard() {
        n => n.toLowerCase().includes('headcount'),
        n => n.toLowerCase().includes('consumption') && !n.toLowerCase().includes('chargeback'),
        n => n.toLowerCase().includes('consumption') && n.toLowerCase().includes('chargeback'),
+       n => n === 'Technology Own Allocation',
        n => n.toLowerCase() === 'no showback',
        n => n.toLowerCase().includes("technology's portion"),
        n => n === 'Direct Chargeback',
@@ -585,7 +604,8 @@ export default function TechnologyShowbackDashboard() {
   const cmdNotShownBack = filtered
     .filter(r => { const st = (r.showbackType || '').toLowerCase().trim(); return st === '' || st === 'none' || st.startsWith('no showback'); })
     .reduce((s, r) => s + _rowValue(r), 0);
-  const cmdCoveragePct  = cmdCoverageBase > 0 ? Math.min(cmdShownBack / cmdCoverageBase * 100, 100) : 0;
+  const cmdCoveragePct         = cmdCoverageBase > 0 ? Math.min(cmdShownBack         / cmdCoverageBase * 100, 100) : 0;
+  const cmdCoveragePctExclTech = cmdCoverageBase > 0 ? Math.min(cmdShownBackExclTech / cmdCoverageBase * 100, 100) : 0;
   // Showback breakdown by method (for Total Showback tile)
   const _sbAmt = (pred) => filtered
     .filter(r => _isShowbackRow(r) && pred(r) && _coverageDepts.some(d => (r[d.key]||0) !== 0))
@@ -1183,7 +1203,7 @@ export default function TechnologyShowbackDashboard() {
                 <div style={{ position: 'relative', width: 100, height: 100, flexShrink: 0 }}>
                   <div style={{
                     width: 100, height: 100, borderRadius: '50%',
-                    background: `conic-gradient(${CYAN} 0deg ${cmdCoveragePct / 100 * 360}deg, #F0F0F0 ${cmdCoveragePct / 100 * 360}deg 360deg)`,
+                    background: `conic-gradient(${CYAN} 0deg ${cmdCoveragePctExclTech / 100 * 360}deg, #F0F0F0 ${cmdCoveragePctExclTech / 100 * 360}deg 360deg)`,
                   }} />
                   <div style={{
                     position: 'absolute', inset: 14,
@@ -1191,7 +1211,7 @@ export default function TechnologyShowbackDashboard() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 20, fontWeight: 700, color: NAVY,
                   }}>
-                    {cmdCoveragePct.toFixed(1)}%
+                    {cmdCoveragePctExclTech.toFixed(1)}%
                   </div>
                 </div>
                 <div>
@@ -1200,9 +1220,9 @@ export default function TechnologyShowbackDashboard() {
                   </div>
                   <div style={{ fontSize: 13, color: '#696F79', lineHeight: 1.6 }}>
                     {(user?.allowed_departments?.length && !user.allowed_departments.includes('Technology')) ? (
-                      <><strong style={{ color: NAVY }}>{cadShort(cmdShownBack)}</strong> is actively shown back or charged to {user.allowed_departments.join(', ')}.</>
+                      <><strong style={{ color: NAVY }}>{cadShort(cmdShownBackExclTech)}</strong> is actively shown back or charged to {user.allowed_departments.join(', ')}.</>
                     ) : (
-                      <><strong style={{ color: NAVY }}>{cadShort(cmdShownBack)}</strong> of the{' '}
+                      <><strong style={{ color: NAVY }}>{cadShort(cmdShownBackExclTech)}</strong> of the{' '}
                       <strong style={{ color: NAVY }}>{cadShort(cmdCoverageBase)}</strong> Technology budget
                       is actively shown back or charged to LOBs.</>
                     )}
@@ -1276,7 +1296,7 @@ export default function TechnologyShowbackDashboard() {
                           }}
                           onMouseEnter={() => setHoveredSegment(entry.name)}
                           onMouseLeave={() => setHoveredSegment(null)}
-                          onClick={() => setHeroModal({ section: 'Cost by Showback Type', title: displayName, note: `${pct(entry.value, totalPeriod)}`, rows: entry.rows, total: entry.value })}
+                          onClick={() => setHeroModal({ section: 'Cost by Showback Type', title: displayName, note: `${pct(entry.value, totalPeriod)}`, rows: entry.rows, total: entry.value, rowAmt: entry.name === 'Technology Own Allocation' ? (r => r.technology || 0) : entry.name.toLowerCase().startsWith('showback') ? (r => (_deptRestrictedKeys || DEPTS).filter(d => d.key !== 'technology').reduce((s, d) => s + (r[d.key] || 0), 0)) : undefined })}
                         >
                           <span style={{
                             width: 12, height: 12,
@@ -1766,17 +1786,17 @@ export default function TechnologyShowbackDashboard() {
                 <div style={card({ padding: '18px 20px' })}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>Shown back to business</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${NAVY}1A`, color: NAVY }}>{cmdCoveragePct.toFixed(1)}%</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: `${NAVY}1A`, color: NAVY }}>{cmdCoveragePctExclTech.toFixed(1)}%</div>
                   </div>
-                  <div onClick={() => setHeroModal({ section: 'By Showback Type', title: 'Shown back to business', note: `${cmdCoveragePct.toFixed(1)}%`, rows: filtered.filter(r => _isShowbackRow(r) && _coverageDepts.some(d => (r[d.key]||0) !== 0)), total: cmdShownBack, rowAmt: _deptRestrictedKeys ? (r => _deptRestrictedKeys.reduce((s, d) => s + (r[d.key] || 0), 0)) : undefined })}
-                       style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>{cadShort(cmdShownBack)}</div>
-                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => _isShowbackRow(r) && DEPTS.some(d => (r[d.key]||0) !== 0)).length} line items allocated to departments</div>
+                  <div onClick={() => setHeroModal({ section: 'By Showback Type', title: 'Shown back to business', note: `${cmdCoveragePctExclTech.toFixed(1)}%`, rows: filtered.filter(r => _isShowbackRow(r) && _nonTechDepts.some(d => (r[d.key]||0) !== 0)), total: cmdShownBackExclTech, rowAmt: r => _nonTechDepts.reduce((s, d) => s + (r[d.key] || 0), 0) })}
+                       style={{ fontSize: 22, fontWeight: 700, color: NAVY, letterSpacing: -0.5, marginBottom: 2, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>{cadShort(cmdShownBackExclTech)}</div>
+                  <div style={{ fontSize: 13, color: '#696F79', marginBottom: 12 }}>{filtered.filter(r => _isShowbackRow(r) && _nonTechDepts.some(d => (r[d.key]||0) !== 0)).length} line items allocated to departments</div>
                   <div style={{ height: 6, background: '#F0F0F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
-                    <div style={{ height: '100%', borderRadius: 3, background: NAVY, width: `${cmdCoveragePct}%` }} />
+                    <div style={{ height: '100%', borderRadius: 3, background: NAVY, width: `${cmdCoveragePctExclTech}%` }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#696F79' }}>
                     <span>Headcount + Consumption + Chargeback methods</span>
-                    <span style={{ fontWeight: 700, color: NAVY, paddingLeft: 6 }}>{cmdCoveragePct.toFixed(1)}%</span>
+                    <span style={{ fontWeight: 700, color: NAVY, paddingLeft: 6 }}>{cmdCoveragePctExclTech.toFixed(1)}%</span>
                   </div>
                 </div>
 
