@@ -157,49 +157,7 @@ Exit the SSH session. The admin can now log in via Zscaler SSO at the app URL.
 
 ---
 
-## Step 7 — Remove Test Accounts
-
-If the app was run locally during development, two test accounts may exist in the database:
-
-| Email | Role |
-|---|---|
-| `testadmin@bci.ca` | Test Admin |
-| `testviewer@bci.ca` | Test Viewer |
-
-These must be deleted before sharing the app with real users. They do not have access to the production app (Zscaler SSO would need to match a real BCI identity), but they clutter the user list and should be cleaned up.
-
-**Remove them via the Admin tab (easiest):**
-
-1. Log in as the production admin created in Step 6
-2. Go to the **Admin** tab
-3. Find `testadmin@bci.ca` and `testviewer@bci.ca` in the user list
-4. Click **Delete** next to each one and confirm
-
-**Or remove them via SSH if the Admin tab is not yet accessible:**
-
-```bash
-az webapp ssh --name <your-app-name> --resource-group <your-rg>
-cd /app/backend
-python - <<'EOF'
-from database import SessionLocal
-from models import User
-db = SessionLocal()
-for email in ["testadmin@bci.ca", "testviewer@bci.ca"]:
-    u = db.query(User).filter(User.email == email).first()
-    if u:
-        db.delete(u)
-        print(f"Deleted {email}")
-    else:
-        print(f"Not found: {email}")
-db.commit()
-EOF
-```
-
-**Note on the sign-in page:** The "Dev Admin" and "Dev Viewer" buttons that appear on the login screen during local development are automatically hidden in production — they only show when the app is accessed from `localhost`. No action needed for those.
-
----
-
-## Step 8 — Verify It's Working
+## Step 7 — Verify It's Working
 
 1. Open `https://<your-app>.azurewebsites.net` in a browser
 2. You should be redirected to the Zscaler login (or logged in automatically if already on the BCI network)
@@ -223,7 +181,7 @@ Common causes:
 
 ---
 
-## Step 9 — Add Users
+## Step 8 — Add Users
 
 Once the admin is logged in:
 
@@ -232,6 +190,61 @@ Once the admin is logged in:
 3. Set `allowed_departments`:
    - Leave empty → full access (Technology team and admins)
    - Set to a department name (e.g. `Finance`) → restricted view, that department's data only
+
+---
+
+## Step 9 — Test Both Roles, Then Remove Test Accounts
+
+If the app was run locally during development, two test accounts may exist in the database:
+
+| Email | Role | What to test |
+|---|---|---|
+| `testadmin@bci.ca` | Admin | Full dashboard, Admin tab, all departments visible, upload works |
+| `testviewer@bci.ca` | Viewer (no department restriction) | Same data as admin but no Admin tab |
+
+Use these to verify both experiences look correct before handing the URL to real users.
+
+**How to log in as a test account:**
+
+Zscaler SSO will not let you log in as `testadmin@bci.ca` — it passes your real BCI identity. To use the test accounts, temporarily switch the app to development mode:
+
+1. In Azure Portal → App Service → Configuration → Application Settings, change `APP_ENV` to `development`
+2. Save and restart the app
+3. Open `https://<your-app>.azurewebsites.net` — the sign-in page will now show **Dev Admin** and **Dev Viewer** buttons at the bottom
+4. Click **Dev Admin** to test the admin experience, **Dev Viewer** for the viewer experience
+5. Once satisfied, change `APP_ENV` back to `production` and restart
+
+> The Dev Admin / Dev Viewer buttons only appear when `APP_ENV=development`. They are hidden automatically in production mode.
+
+**Once testing is complete — delete the test accounts:**
+
+Via the Admin tab (log back in as the production admin first):
+
+1. Go to **Admin** tab
+2. Find `testadmin@bci.ca` and `testviewer@bci.ca` in the user list
+3. Click **Delete** next to each one and confirm
+
+Or via SSH if preferred:
+
+```bash
+az webapp ssh --name <your-app-name> --resource-group <your-rg>
+cd /app/backend
+python - <<'EOF'
+from database import SessionLocal
+from models import User
+db = SessionLocal()
+for email in ["testadmin@bci.ca", "testviewer@bci.ca"]:
+    u = db.query(User).filter(User.email == email).first()
+    if u:
+        db.delete(u)
+        print(f"Deleted {email}")
+    else:
+        print(f"Not found: {email}")
+db.commit()
+EOF
+```
+
+Switch `APP_ENV` back to `production`, restart the app, and it is ready to share with real users.
 
 ---
 
