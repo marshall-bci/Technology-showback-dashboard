@@ -1203,7 +1203,7 @@ export default function TechnologyShowbackDashboard() {
               name: 'Headcount-Based Showback',
               badge: 'Primary model',
               color: NAVY,
-              meta: `Shared across all 12 LOBs proportional to FY${{ actuals: baseYear, budget: baseYear, forecast1: baseYear + 1, forecast2: baseYear + 2 }[period] ?? baseYear} headcount`,
+              meta: `Shared across all 12 departments proportional to FY${{ actuals: baseYear, budget: baseYear, forecast1: baseYear + 1, forecast2: baseYear + 2 }[period] ?? baseYear} headcount`,
               rows: filtered.filter(r => (r.showbackType || '').toLowerCase().includes('headcount') && DEPTS.some(d => (r[d.key] || 0) !== 0)),
             },
             {
@@ -1258,7 +1258,7 @@ export default function TechnologyShowbackDashboard() {
                     ) : (
                       <><strong style={{ color: NAVY }}>{cadShort(cmdShownBackExclTech)}</strong> of the{' '}
                       <strong style={{ color: NAVY }}>{cadShort(cmdCoverageBase)}</strong> Technology budget
-                      is actively shown back or charged to LOBs.</>
+                      is actively shown back or charged to departments.</>
                     )}
                   </div>
                 </div>
