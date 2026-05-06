@@ -890,10 +890,10 @@ export default function TechnologyShowbackDashboard() {
 
       {/* ── BCI Technology Cost Landscape ─────────────────────────────────────── */}
       {activeTab === 'overview' && rows.length > 0 && showNotShownBackPanel && deptTechCost?.loaded && (() => {
-        const bciTotal    = deptTechCost.total.actuals;
-        const bciTotalBgt = deptTechCost.total.budget;
-        const techActuals = deptTechCost.technology.actuals;
-        const techBudget  = deptTechCost.technology.budget;
+        const bciTotal    = deptTechCost.total[_ocField]       || 0;
+        const bciTotalBgt = deptTechCost.total.budget          || 0;
+        const techActuals = deptTechCost.technology[_ocField]  || 0;
+        const techBudget  = deptTechCost.technology.budget     || 0;
         const exclActuals = bciTotal - techActuals;
         const exclBudget  = bciTotalBgt - techBudget;
         const tile = (extra = {}) => ({
@@ -921,29 +921,35 @@ export default function TechnologyShowbackDashboard() {
         return (
           <div style={{ background: '#002847', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div style={tile()}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Total BCI Technology Cost · FY{baseYear} Actual</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Total BCI Technology Cost · {periodLabel}</div>
               <div style={{ fontSize: 28, fontWeight: 700, color: 'white', letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{cadShort(bciTotal)}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {varPill(bciTotalBgt, bciTotal)}
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(bciTotalBgt)} budget</span>
-              </div>
+              {period === 'actuals' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {varPill(bciTotalBgt, bciTotal)}
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(bciTotalBgt)} budget</span>
+                </div>
+              )}
             </div>
             <div style={tile()}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Excl. Technology Department</div>
               <div style={{ fontSize: 28, fontWeight: 700, color: '#69F0AE', letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{cadShort(exclActuals)}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {varPill(exclBudget, exclActuals)}
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(exclBudget)} budget</span>
-              </div>
+              {period === 'actuals' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {varPill(exclBudget, exclActuals)}
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(exclBudget)} budget</span>
+                </div>
+              )}
               {allocationBar(exclBudget, bciTotalBgt)}
             </div>
             <div style={tile({ borderRight: 'none' })}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 6 }}>Technology Department · Central Budget</div>
               <div style={{ fontSize: 28, fontWeight: 700, color: 'white', letterSpacing: '-1px', lineHeight: 1, marginBottom: 5 }}>{cadShort(techActuals)}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {varPill(techBudget, techActuals)}
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(techBudget)} budget</span>
-              </div>
+              {period === 'actuals' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {varPill(techBudget, techActuals)}
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,.65)' }}>vs {cadShort(techBudget)} budget</span>
+                </div>
+              )}
               {allocationBar(techBudget, bciTotalBgt)}
             </div>
           </div>
