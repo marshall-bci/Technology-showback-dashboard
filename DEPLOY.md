@@ -157,7 +157,49 @@ Exit the SSH session. The admin can now log in via Zscaler SSO at the app URL.
 
 ---
 
-## Step 7 — Verify It's Working
+## Step 7 — Remove Test Accounts
+
+If the app was run locally during development, two test accounts may exist in the database:
+
+| Email | Role |
+|---|---|
+| `testadmin@bci.ca` | Test Admin |
+| `testviewer@bci.ca` | Test Viewer |
+
+These must be deleted before sharing the app with real users. They do not have access to the production app (Zscaler SSO would need to match a real BCI identity), but they clutter the user list and should be cleaned up.
+
+**Remove them via the Admin tab (easiest):**
+
+1. Log in as the production admin created in Step 6
+2. Go to the **Admin** tab
+3. Find `testadmin@bci.ca` and `testviewer@bci.ca` in the user list
+4. Click **Delete** next to each one and confirm
+
+**Or remove them via SSH if the Admin tab is not yet accessible:**
+
+```bash
+az webapp ssh --name <your-app-name> --resource-group <your-rg>
+cd /app/backend
+python - <<'EOF'
+from database import SessionLocal
+from models import User
+db = SessionLocal()
+for email in ["testadmin@bci.ca", "testviewer@bci.ca"]:
+    u = db.query(User).filter(User.email == email).first()
+    if u:
+        db.delete(u)
+        print(f"Deleted {email}")
+    else:
+        print(f"Not found: {email}")
+db.commit()
+EOF
+```
+
+**Note on the sign-in page:** The "Dev Admin" and "Dev Viewer" buttons that appear on the login screen during local development are automatically hidden in production — they only show when the app is accessed from `localhost`. No action needed for those.
+
+---
+
+## Step 8 — Verify It's Working
 
 1. Open `https://<your-app>.azurewebsites.net` in a browser
 2. You should be redirected to the Zscaler login (or logged in automatically if already on the BCI network)
@@ -181,7 +223,7 @@ Common causes:
 
 ---
 
-## Step 8 — Add Users
+## Step 9 — Add Users
 
 Once the admin is logged in:
 
