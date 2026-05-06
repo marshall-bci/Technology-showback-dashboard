@@ -1017,7 +1017,7 @@ export default function TechnologyShowbackDashboard() {
          .sort((a, b) => b.amount - a.amount) : [];
         const expandMethodMax = expandMethods[0]?.amount || 1;
         return (
-          <>
+          <div style={{ borderRadius: '0 0 20px 20px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,40,71,.45)', position: 'relative', zIndex: 1 }}>
           <div style={{ background: '#004C8C', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: cmdExpandLabel ? 'none' : '1px solid rgba(255,255,255,.08)' }}>
             {tiles.map((c, i) => (
               <div key={i} style={{ padding: '14px 28px', borderRight: i < tiles.length - 1 ? '1px solid rgba(255,255,255,.25)' : 'none' }}>
@@ -1102,7 +1102,7 @@ export default function TechnologyShowbackDashboard() {
               </div>
             </div>
           )}
-          </>
+          </div>
         );
       })()}
 
