@@ -979,16 +979,6 @@ export default function TechnologyShowbackDashboard() {
             sub:       period === 'actuals' ? `vs ${cadShort(totalBudget)} budget` : null,
           },
           {
-            label:      `Total Showback ${cadShort(cmdShownBackExclTech)} · Breakdown`,
-            pendingAmt: cmdPendingUserList,
-            pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
-            breakdown: [
-              { label: 'Headcount',   amount: cmdShowbackHCxt,    color: '#69F0AE',               pct: cmdShownBackExclTech > 0 ? cmdShowbackHCxt    / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _nonTechDepts.some(d=>(r[d.key]||0)!==0)) },
-              { label: 'Consumption', amount: cmdShowbackConxt,   color: 'rgba(255,255,255,.85)', pct: cmdShownBackExclTech > 0 ? cmdShowbackConxt   / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _nonTechDepts.some(d=>(r[d.key]||0)!==0); }) },
-              { label: 'Con → CB',    amount: cmdShowbackConCBxt, color: 'rgba(255,255,255,.85)', pct: cmdShownBackExclTech > 0 ? cmdShowbackConCBxt / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _nonTechDepts.some(d=>(r[d.key]||0)!==0); }) },
-            ],
-          },
-          {
             label:    `Technology ${cadShort(cmdTechNotShownBack)} · Breakdown · No Showback`,
             breakdown: [
               { label: 'Tech Absorbed',     amount: cmdNoShowbackTech,   color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdNoShowbackTech   / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isTechPortion(r) && !_isDCB(r)) },
@@ -996,6 +986,16 @@ export default function TechnologyShowbackDashboard() {
               { label: 'Own Alloc',         amount: cmdTechOwnShowback,  color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdTechOwnShowback  / totalPeriod * 100 : 0, section: 'Not Shown Back', expandByMethod: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.technology || 0) !== 0) },
               { label: 'Direct Chargeback', amount: cmdDirectCB,         color: 'rgba(255,255,255,.85)', pct: totalPeriod > 0 ? cmdDirectCB         / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => _isDCB(r)) },
               { label: 'Not Configured',    amount: cmdNotConfigured,    color: '#FFD54F',               pct: totalPeriod > 0 ? cmdNotConfigured    / totalPeriod * 100 : 0, section: 'Not Shown Back', rows: filtered.filter(r => !(r.showbackType||'').trim()) },
+            ],
+          },
+          {
+            label:      `Total Showback ${cadShort(cmdShownBackExclTech)} · Breakdown`,
+            pendingAmt: cmdPendingUserList,
+            pendingRows: filtered.filter(r => _isShowbackRow(r) && DEPTS.every(d => (r[d.key]||0) === 0)),
+            breakdown: [
+              { label: 'Headcount',   amount: cmdShowbackHCxt,    color: '#69F0AE',               pct: cmdShownBackExclTech > 0 ? cmdShowbackHCxt    / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => _isShowbackRow(r) && (r.showbackType||'').toLowerCase().includes('headcount') && _nonTechDepts.some(d=>(r[d.key]||0)!==0)) },
+              { label: 'Consumption', amount: cmdShowbackConxt,   color: 'rgba(255,255,255,.85)', pct: cmdShownBackExclTech > 0 ? cmdShowbackConxt   / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && !st.includes('chargeback') && _nonTechDepts.some(d=>(r[d.key]||0)!==0); }) },
+              { label: 'Con → CB',    amount: cmdShowbackConCBxt, color: 'rgba(255,255,255,.85)', pct: cmdShownBackExclTech > 0 ? cmdShowbackConCBxt / cmdShownBackExclTech * 100 : 0, section: 'Shown Back', expandByDept: true, rows: filtered.filter(r => { const st=(r.showbackType||'').toLowerCase(); return _isShowbackRow(r) && st.includes('consumption') && st.includes('chargeback') && _nonTechDepts.some(d=>(r[d.key]||0)!==0); }) },
             ],
           },
         ];
