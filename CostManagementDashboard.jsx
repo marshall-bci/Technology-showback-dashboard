@@ -1125,6 +1125,7 @@ export default function TechnologyShowbackDashboard() {
               </select>
             </label>
           ))}
+          {/* Cost Model filter hidden — uncomment to re-enable
           {costModelFilterOpts.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: '1px solid #E8E8E8', paddingLeft: 16 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#BFBFBF', textTransform: 'uppercase', letterSpacing: 1, marginRight: 2 }}>Cost Model</span>
@@ -1148,6 +1149,7 @@ export default function TechnologyShowbackDashboard() {
               })}
             </div>
           )}
+          */}
           <span style={{ marginLeft: 'auto', fontSize: 12, color: '#696F78' }}>
             {filtered.length} of {rows.length} line items
           </span>
